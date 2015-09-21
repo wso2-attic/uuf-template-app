@@ -1,0 +1,7 @@
+<div class="container-fluid" style="margin-top: 15px;">
+    <div class="col-md-10 col-md-offset-1">
+        {{#each this.apps}}
+            {{unit "org.wso2.uuf.sample.units.app-tile" appId=this}}
+        {{/each}}
+    </div>
+</div>

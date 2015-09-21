@@ -1,0 +1,7 @@
+{
+    "version": "1.0.0",
+    "extends": "org.wso2.uuf.sample.units.logo",
+    "scope": [
+        "/{+rest}"
+    ]
+}
