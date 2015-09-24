@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>uuf.template.app</groupId>
-    <artifactId>uuf-template.app</artifactId>
+    <artifactId>uuf-template-app</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
@@ -25,6 +25,8 @@
                             <descriptors>
                                 <descriptor>resource.xml</descriptor>
                             </descriptors>
+                            <finalName>${pom.artifactId}-${pom.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
                         </configuration>
                     </execution>
                 </executions>
