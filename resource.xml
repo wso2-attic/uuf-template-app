@@ -18,7 +18,7 @@
             </excludes>
 
             <includes>
-                <include>lib</include>
+                <include>**/lib/**</include>
                 <include>jaggery.conf</include>
 
             </includes>
