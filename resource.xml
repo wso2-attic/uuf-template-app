@@ -1,0 +1,28 @@
+<assembly>
+    <id>resources</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <fileSets>
+        <fileSet>
+            <directory></directory>
+            <outputDirectory></outputDirectory>
+
+            <excludes>
+                <exclude>pom.xml</exclude>
+                <exclude>*.iml</exclude>
+                <exclude>**/src/**</exclude>
+                <exclude>**/target/**</exclude>
+                <exclude>resource.xml</exclude>
+                <exclude>**/.idea/**</exclude>
+            </excludes>
+
+            <includes>
+                <include>lib</include>
+                <include>jaggery.conf</include>
+
+            </includes>
+        </fileSet>
+    </fileSets>
+</assembly>
