@@ -6,22 +6,18 @@
     <includeBaseDirectory>false</includeBaseDirectory>
     <fileSets>
         <fileSet>
+            <!-- Take everything inside the root directory -->
             <directory></directory>
-            <outputDirectory></outputDirectory>
+            <!-- And place it inside the root of the zip file -->
+            <outputDirectory>/</outputDirectory>
+            <!-- Excluding files and directories -->
             <excludes>
                 <exclude>pom.xml</exclude>
                 <exclude>*.iml</exclude>
                 <exclude>**/src/**</exclude>
                 <exclude>**/target/**</exclude>
                 <exclude>resource.xml</exclude>
-                <exclude>**/.idea/**</exclude>
             </excludes>
-
-            <includes>
-                <include>**/lib/**</include>
-                <include>jaggery.conf</include>
-
-            </includes>
         </fileSet>
     </fileSets>
 </assembly>
