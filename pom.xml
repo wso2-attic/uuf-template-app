@@ -11,13 +11,13 @@
 
     <build>
         <plugins>
-            <!-- Plugin to zip the template app -->
+            <!--Plugin to zip the app  -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>make shared resources</id>
+                        <id>pack</id>
                         <goals>
                             <goal>single</goal>
                         </goals>
@@ -26,7 +26,7 @@
                             <descriptors>
                                 <descriptor>resource.xml</descriptor>
                             </descriptors>
-                            <finalName>${pom.artifactId}</finalName>
+                            <finalName>${project.artifactId}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
                         </configuration>
                     </execution>
@@ -63,6 +63,26 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Plugin to create the cache folder in build time -->
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>generate-sources</id>
+                        <phase>compile</phase>
+                        <configuration>
+                            <tasks>
+                                <mkdir dir="cache"/>
+                            </tasks>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 
