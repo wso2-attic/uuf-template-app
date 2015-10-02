@@ -19,6 +19,7 @@
                 <exclude>**/pages/**</exclude>
                 <exclude>**/docs/**</exclude>
                 <exclude>**/units/**</exclude>
+                <exclude>README.md</exclude>
             </excludes>
         </fileSet>
         <fileSet>
