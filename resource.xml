@@ -7,21 +7,30 @@
     <fileSets>
         <fileSet>
             <directory></directory>
-            <outputDirectory></outputDirectory>
+            <outputDirectory>/</outputDirectory>
+            <!-- Excluding files and directories -->
             <excludes>
                 <exclude>pom.xml</exclude>
                 <exclude>*.iml</exclude>
                 <exclude>**/src/**</exclude>
                 <exclude>**/target/**</exclude>
                 <exclude>resource.xml</exclude>
-                <exclude>**/.idea/**</exclude>
+                <exclude>**/layouts/**</exclude>
+                <exclude>**/pages/**</exclude>
+                <exclude>**/docs/**</exclude>
+                <exclude>**/units/**</exclude>
             </excludes>
-
+        </fileSet>
+        <fileSet>
+            <directory></directory>
+            <outputDirectory>app</outputDirectory>
+            <!-- Including files and directories -->
             <includes>
-                <include>**/lib/**</include>
-                <include>jaggery.conf</include>
-
+                <include>**/layouts/**</include>
+                <include>**/pages/**</include>
+                <include>**/units/**</include>
             </includes>
         </fileSet>
+
     </fileSets>
 </assembly>
