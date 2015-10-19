@@ -1,3 +1,12 @@
 <%
-    // TODO: implement debugging feature
+function renderDebugging(filePath, response) {
+    var debuggerLibFile = new File(filePath);
+    if (debuggerLibFile.isExists()) {
+        include(debuggerLibFile.getPath());
+    } else {
+        debuggerLibFile = new File(filePath);
+        response.sendRedirect('/' + fuseState.appName + '/debug/enable');
+    }
+}
+
 %>

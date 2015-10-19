@@ -1,10 +1,9 @@
 <%
 var Utils = require("utils.js");
 var configs = Utils.getAppConfigurations();
-var lookUpTable = Utils.getLookUpTable(configs);
+var lookUpTable = Utils.getLookupTable(configs);
 var DynamicRouter = require("dynamic-files-router.js");
 
 // TODO: handle error/exceptions
 DynamicRouter.route(request, response, lookUpTable, configs);
-
 %>

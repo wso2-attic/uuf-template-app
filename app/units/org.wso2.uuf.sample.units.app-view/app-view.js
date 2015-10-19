@@ -12,7 +12,7 @@ function getApps() {
 
 function onRequest(context) {
     var apps = getApps();
-    var app = apps[request.getAllParameters().id];
+    var app = apps[context.uriParams["uuid"]];
     if (!app) {
         app = apps['app-default'];
     }

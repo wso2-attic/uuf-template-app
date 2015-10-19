@@ -1,6 +1,6 @@
 {
     "displayName": "UUF Template App",
-    "cachingEnabled": true,
+    "cachingEnabled": false,
     "debuggingEnabled": false,
     "logLevel": "debug",
     "welcomeFile": "",
@@ -12,22 +12,6 @@
         {
             "code": "404",
             "path": "/client/not-found.hbs"
-        }
-    ],
-    "securityConstraints": [
-        {
-            "urlPattern": "/asset/{operation}",
-            "permissions": [
-                "publisher/asset/create",
-                "publisher/asset/edit"
-            ]
-        },
-        {
-            "urlPattern": "/dashboard/{assetType}/view/{deviceType}",
-            "permissions": [
-                "store/mobile/view",
-                "store/web/view"
-            ]
         }
     ]
 }

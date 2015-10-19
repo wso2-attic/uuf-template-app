@@ -1,19 +1,19 @@
 {{#zone "topCss"}}
-    <link rel="stylesheet" href="{{unit.publicUri}}/css/app-view-style.css">
+    <link rel="stylesheet" href="{{@unit.publicUri}}/css/app-view-style.css">
 {{/zone}}
 
 <div class="asset-description">
     <div class="asset-description-header">
         <div class="asset-banner">
-            <img src="{{unit.publicUri}}/img/webapp-banner.jpg">
+            <img src="{{@unit.publicUri}}/img/webapp-banner.jpg">
         </div>
     </div>
     <div class="asset-introduction-box">
         <div>
-            <img class="web-asset-img" src="{{unit.publicUri}}/img/{{this.icon}}">
+            <img class="web-asset-img" src="{{@unit.publicUri}}/img/{{icon}}">
         </div>
         <div>
-            <h4>{{this.name}}</h4>
+            <h4>{{name}}</h4>
             <small class="web-asset-clear">Version : 1.0.0</small>
             <small>By : admin</small>
             <small>Status : Published</small>
@@ -29,7 +29,7 @@
             </a>
         </div>
         <div style="margin-top: 25px;">
-            URL: <a href="{{this.url}}" target="_blank">{{this.url}}</a>
+            URL: <a href="{{url}}" target="_blank">{{url}}</a>
         </div>
     </div>
 </div>

@@ -1,8 +1,8 @@
 {{#zone "topCss"}}
-    <link rel="stylesheet" href="{{unit.publicUri}}/less/login-input.css">
+    <link rel="stylesheet" href="{{@unit.publicUri}}/less/login-input.css">
 {{/zone}}
 
-<form class="{{unit.class}}">
+<form class="{{@unit.class}}">
     <div class="form-group">
         <input type="text" class="form-control" placeholder="User Name" required autofocus>
     </div>
@@ -10,7 +10,7 @@
         <input type="password" class="form-control" placeholder="Password" required>
     </div>
     <div class="form-group">
-        <a class="btn btn-primary btn-block" href="{{this.app.uri}}/apps">Sign in</a>
+        <a class="btn btn-primary btn-block" href="{{@app.uri}}/apps">Sign in</a>
     </div>
     <div class="form-group">
         <label class="pull-left">
