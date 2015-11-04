@@ -1,7 +1,7 @@
 <%
 var isCachingEnabled = false;
 var Utils = require("utils.js");
-var configs = Utils.getConfigurations(isCachingEnabled);
+var configs = Utils.getAppConfigurations();
 var lookUpTable = Utils.getLookupTable(configs);
 var StaticRouter = require("static-files-router.js");
 

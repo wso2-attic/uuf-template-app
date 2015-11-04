@@ -1,40 +1,75 @@
+<!--
+~   Copyright (c) WSO2 Inc. (http://wso2.com) All Rights Reserved.
+~
+~   Licensed under the Apache License, Version 2.0 (the "License");
+~   you may not use this file except in compliance with the License.
+~   You may obtain a copy of the License at
+~
+~        http://www.apache.org/licenses/LICENSE-2.0
+~
+~   Unless required by applicable law or agreed to in writing, software
+~   distributed under the License is distributed on an "AS IS" BASIS,
+~   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~   See the License for the specific language governing permissions and
+~   limitations under the License.
+-->
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{defineZone "title"}}</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{{#defineZone "title"}}WSO2 Template{{/defineZone}}</title>
+    {{defineZone "favicon"}}
+    {{defineZone "themeCss"}}
     {{defineZone "topCss"}}
     {{defineZone "topJs"}}
 </head>
 <body>
 
-<div class="navbar navbar-default navbar-fixed-top navbar-inverse" role="navigation">
-    <div class="container-liquid">
-        <div class="navbar-header">
-            <div class="navbar-brand">{{defineZone "brand"}}</div>
-        </div>
-        <div class="navbar-collapse collapse">
-            <div class="nav navbar-nav navbar-right">
-                {{defineZone "upperRight"}}
-            </div>
-        </div>
+<!-- header -->
+{{defineZone "header"}}
+<!-- /.header -->
+
+<!-- navbar -->
+<div class="navbar-wrapper">
+    {{defineZone "navbars"}}
+</div>
+{{defineZone "navbarsBelow"}}
+<!-- /.navbar -->
+
+<!-- .left-sidebars -->
+{{defineZone "sidePanes"}}
+<!-- /.left-sidebars -->
+
+<!-- .right-sidebar -->
+{{defineZone "rightSidebars"}}
+<!-- /.right-sidebars -->
+
+<!-- #page-content-wrapper -->
+<div class="page-content-wrapper">
+    <!-- page content -->
+    <div class="container-fluid body-wrapper">
+        {{defineZone "content"}}
     </div>
 </div>
+<!-- /#page-content-wrapper -->
 
-<div id="wrap">
-    <div class="container-fluid">
-        <div class="row">
-            {{defineZone "content"}}
-        </div>
-    </div>
-    <!-- /container -->
-</div>
-
+<!-- footer -->
 <footer class="footer">
-    <div class="container col-md-12">
-        {{defineZone "footer"}}
+    <div class="container-fluid">
+        {{#defineZone "footer"}}
+            <p>
+                WSO2 | &copy; 2015
+                <a href="http://wso2.com/" target="_blank"><i class="icon fw fw-wso2"></i> Inc</a>.
+            </p>
+        {{/defineZone}}
     </div>
 </footer>
+
 {{defineZone "bottomJs"}}
+
 </body>
 </html>

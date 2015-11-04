@@ -1,9 +1,0 @@
-{
-    "version": "1.0.0",
-    "index": 0,
-    "extends": "org.wso2.uuf.sample.units.bootstrap",
-    "pushedUris": [
-        "/",
-        "/{+any}"
-    ]
-}

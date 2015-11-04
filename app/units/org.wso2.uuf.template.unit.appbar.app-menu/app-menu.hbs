@@ -1,0 +1,17 @@
+{{#zone "appbarHeader"}}
+    <a class="navbar-menu-toggle" data-toggle="dropdown">
+    <span class="icon fw-stack">
+        <i class="fw fw-tiles fw-stack-1x"></i>
+    </span>
+    </a>
+    <ul class="dropdown-menu tiles arrow dark add-margin-1x" role="menu">
+        {{#defineZone "appMenuItem"}}
+            <li>
+                <a href="{{defineZone "appMenuItem-uri"}}">
+                    <i class="icon fw {{defineZone "appMenuItem-icon"}}"></i>
+                    <span class="name">{{defineZone "appMenuItem-name"}}</span>
+                </a>
+            </li>
+        {{/defineZone}}
+    </ul>
+{{/zone}}
