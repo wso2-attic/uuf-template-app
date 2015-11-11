@@ -23,53 +23,40 @@
 
     <title>{{#defineZone "title"}}WSO2 Template{{/defineZone}}</title>
     {{defineZone "favicon"}}
-    {{defineZone "themeCss"}}
     {{defineZone "topCss"}}
     {{defineZone "topJs"}}
 </head>
 <body>
-
 <!-- header -->
 {{defineZone "header"}}
-<!-- /.header -->
+<!-- /header -->
 
-<!-- navbar -->
+<!-- navbars -->
 <div class="navbar-wrapper">
     {{defineZone "navbars"}}
 </div>
-{{defineZone "navbarsBelow"}}
-<!-- /.navbar -->
+<!-- /navbars -->
 
-<!-- .left-sidebars -->
+<!-- sidepanes -->
 {{defineZone "sidePanes"}}
-<!-- /.left-sidebars -->
+<!-- /sidepanes -->
 
-<!-- .right-sidebar -->
-{{defineZone "rightSidebars"}}
-<!-- /.right-sidebars -->
-
-<!-- #page-content-wrapper -->
+<!-- page-content-wrapper -->
 <div class="page-content-wrapper">
-    <!-- page content -->
     <div class="container-fluid body-wrapper">
         {{defineZone "content"}}
     </div>
 </div>
-<!-- /#page-content-wrapper -->
+<!-- /page-content-wrapper -->
 
 <!-- footer -->
 <footer class="footer">
     <div class="container-fluid">
-        {{#defineZone "footer"}}
-            <p>
-                WSO2 | &copy; 2015
-                <a href="http://wso2.com/" target="_blank"><i class="icon fw fw-wso2"></i> Inc</a>.
-            </p>
-        {{/defineZone}}
+        {{defineZone "footer"}}
     </div>
 </footer>
+<!-- /footer -->
 
 {{defineZone "bottomJs"}}
-
 </body>
 </html>
