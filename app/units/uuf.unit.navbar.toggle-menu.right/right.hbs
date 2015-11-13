@@ -6,14 +6,15 @@
            aria-controls="_uuf-toggle-menu-right-pane" aria-expanded="false">
             {{#defineZone "toggleMenuRight-icon"}}
                 <span class="icon fw-stack">
-                <i class="fw fw-settings fw-stack-1x"></i>
-                <i class="fw fw-ring fw-stack-2x"></i>
-            </span>
+                    <i class="fw fw-settings fw-stack-1x"></i>
+                    <i class="fw fw-ring fw-stack-2x"></i>
+                </span>
             {{/defineZone}}
         </a>
     </li>
 {{/zone}}
 
 {{~#zone "sidePane-id"}}_uuf-toggle-menu-right-pane{{/zone}}
+{{~#zone "sidePane-class"}}inverse{{/zone}}
 {{~#zone "sidePane-orientation"}}right{{/zone}}
 {{~#zone "sidePane-content"}}{{defineZone "toggleMenuRight-content"}}{{/zone}}
