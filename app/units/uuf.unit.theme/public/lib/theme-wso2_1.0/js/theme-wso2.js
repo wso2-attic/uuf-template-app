@@ -84,7 +84,7 @@ var responsiveTextRatio = 0.2,
              .attr('data-platform', navigator.platform)
              .addClass(((!!('ontouchstart' in window) || !!('onmsgesturechange' in window)) ? ' touch' : ''));
      };
-    
+
     /**
      * @description Data Loader function
      * @param  {String}     Action of the loader
@@ -116,7 +116,7 @@ var responsiveTextRatio = 0.2,
                 $('.loading-animation, .loading-bg', this).remove();
             }
         });
-        
+
     };
 
 
@@ -164,7 +164,7 @@ var responsiveTextRatio = 0.2,
      * @description Auto resize icons and text on browser resize
      * @param  {Number}     Compression Ratio
      * @param  {Object}     Object containing the values to override defaults
-     * @return {Node}       DOM Node 
+     * @return {Node}       DOM Node
      */
     $.fn.responsive_text = function(compress, options){
 
@@ -194,23 +194,23 @@ var responsiveTextRatio = 0.2,
         });
 
     };
-    
+
     /**
      * @description Random background color generator for thumbs
      * @param  {range}      Color Range Value
-     * @return {Node}       DOM Node 
+     * @return {Node}       DOM Node
      */
     $.fn.random_background_color = function(range){
-        
+
         if(!range){
             range = 9;
         }
-        
+
         return this.each(function(){
-            
+
             var color = '#'+Math.random().toString(range).substr(-6);
             $(this).css('background', color);
-            
+
         });
 
     };
@@ -391,9 +391,9 @@ var responsiveTextRatio = 0.2,
                         var thisTable = $(this).closest('.dataTables_wrapper').find('.dataTable').dataTable();
                         thisTable.api().rows('.'+ROW_SELECTED_CLASS).remove().draw(false);
                     });
-                    
+
                     $('.random-thumbs .thumbnail.icon').random_background_color();
-                    
+
                 }
             },settings)
         );
@@ -494,7 +494,7 @@ var responsiveTextRatio = 0.2,
 (function ($) {
 
     $.fn.MutationObserverWrapper = function (options) {
-        
+
         if(isSupported() === false){
             throw 'Mutation observer is not supported by your browser.'
         }
@@ -519,11 +519,11 @@ var responsiveTextRatio = 0.2,
         var target = $(this)[0];
         var plugin = $.fn.MutationObserverWrapper;
         var options = $.extend({}, defaults, options)
-        
+
         var observer = new MutationObserver(options.callback);
 
         observer.observe(target, options.config);
-        
+
     }
 
     function isSupported() {
@@ -539,7 +539,6 @@ var responsiveTextRatio = 0.2,
 }(jQuery));
 
 $(document).ready(function(){
-
     $('.tree-view').tree_view();
     $.file_input();
     $.sidebar_toggle();
@@ -550,7 +549,10 @@ $(document).ready(function(){
         e.stopPropagation();
     });
     $(responsiveTextSleector).responsive_text(responsiveTextRatio);
-    $('.select2').select2();
+    var select2Elements = $('.select2');
+    if (select2Elements.length > 0) {
+        select2Elements.select2();
+    }
 });
 
 $(window).scroll(function(){
