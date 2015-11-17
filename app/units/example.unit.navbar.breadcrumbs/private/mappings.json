@@ -1,0 +1,13 @@
+{
+    "/": [
+        {
+            "text": "",
+            "icon": "<i class=\"icon fw fw-home\"></i>",
+            "uri": "/"
+        },
+        {
+            "text": "example",
+            "uri": "/example-page"
+        }
+    ]
+}
