@@ -1,0 +1,29 @@
+{
+    "appName": "UUF Template App",
+    "cachingEnabled": true,
+    "debuggingEnabled": false,
+    "permissionRoot": "/",
+    "loginUri": "${app.context}/signin",
+    "adminServicesUrl": "https://${server.ip}:${server.https_port}/admin/services/",
+    "authModule": {
+        "enabled": true,
+        "transport": "https",
+        "login": {
+            "onSuccess": "${app.context}/",
+            "onFail": "${app.context}/signin"
+        },
+        "logout": {
+            "onSuccess": "${app.context}/signin",
+            "onFail": "${app.context}/"
+        },
+        "sso": {
+            "enabled": false,
+            "issuer": "mdm",
+            "responseSigningEnabled": true,
+            "keyStoreName": "repository/resources/security/wso2carbon.jks",
+            "keyStorePassword": "wso2carbon",
+            "identityProviderAlias": "wso2carbon",
+            "identityProviderUrl": "https://${server.ip}:${server.https_port}/samlsso"
+        }
+    }
+}

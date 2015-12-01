@@ -1,0 +1,45 @@
+<%
+var log = new Log("auth-module-login");
+var authModule = require("auth.js");
+
+if (!authModule.isEnabled()) {
+    log.warn("Auth module is not enabled in the application configuration file.");
+    response.sendError(404);
+    exit();
+}
+
+var currentUser = authModule.getCurrentUser();
+if (currentUser) {
+    if (log.isDebugEnabled()) {
+        log.debug("User '" + currentUser.username + "' is already logged in.");
+    }
+    var referer = request.getHeader("referer");
+    var redirectUrl = (referer) ? referer : (request.getContextPath() + "/");
+    response.sendRedirect(redirectUrl);
+    exit();
+}
+
+if (authModule.isSsoEnabled()) {
+    // SSO is enabled.
+    var ssoRequestParams = authModule.getSsoLoginRequestParams();
+    if (ssoRequestParams) {
+        print("<div><p>You are now being redirected to Identity Server. If the redirection fails, "
+              + "please click on the button below.</p><form method='post' action='"
+              + ssoRequestParams.identityProviderUrl
+              + "'><input type='hidden' name='SAMLRequest' value='"
+              + ssoRequestParams.encodedSAMLAuthRequest
+              + "'/><input type='hidden' name='RelayState' value='" + ssoRequestParams.relayState
+              + "'/><input type='hidden' name='SSOAuthSessionID' value='"
+              + ssoRequestParams.sessionId
+              + "'/><button type='submit'>Redirect manually</button></form></div>"
+              + "<script type='text/javascript'>document.forms[0].submit();</script>");
+    } else {
+        // Some error occurred when getting SSO login request parameters.
+    }
+} else {
+    // Generic login process is enabled.
+    var username = request.getParameter("username");
+    var password = request.getParameter("password");
+    authModule.login(username, password);
+}
+%>
