@@ -59,5 +59,10 @@ var constants = {
     HELPER_PARAM_UNIT_PARAMS: "_unitParams",
     HELPER_PARAM_OVERRIDE: "override",
     HELPER_PARAM_COMBINE: "combine",
-    HELPER_PARAM_SCOPE: "scope"
+    HELPER_PARAM_SCOPE: "scope",
+    //authentication
+    USER_SESSION_KEY: "userSessionKey",
+    DEFAULT_USER_SESSION_KEY: "USER",
+    LOGIN_REDIRECTION_URI_KEY: "loginRedirectionUri",
+    DEFAULT_LOGIN_REDIRECTION_URI: "/login"
 };
