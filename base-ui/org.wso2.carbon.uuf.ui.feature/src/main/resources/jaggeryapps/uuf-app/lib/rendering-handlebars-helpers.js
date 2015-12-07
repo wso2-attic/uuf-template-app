@@ -385,7 +385,8 @@ function registerHelpers(renderingData, lookupTable) {
             var scriptContext = {
                 app: {name: appName, context: appContext},
                 unit: {cssClass: unitCssClass, params: unitParams, publicUri: unitPublicUri},
-                uriParams: uriParams
+                uriParams: uriParams,
+                handlebars: handlebarsEnvironment
             };
             templateContext = executeScript(processingUnit, "unit", unitScriptData, scriptContext,
                                             lookupTable);
