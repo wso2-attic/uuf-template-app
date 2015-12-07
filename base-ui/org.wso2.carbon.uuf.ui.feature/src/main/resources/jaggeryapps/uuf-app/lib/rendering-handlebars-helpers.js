@@ -533,6 +533,33 @@ function registerHelpers(renderingData, lookupTable) {
     }
 
     /**
+     * 'authenticated' Handlebars helper function.
+     * @returns {string} empty string
+     */
+    function authenticationHelper(){
+        var appConf = Utils.getAppConfigurations();
+        //retrieving user session key
+        var userSessionKey = appConf[constants.USER_SESSION_KEY];
+        if(!userSessionKey){
+            userSessionKey = constants.DEFAULT_USER_SESSION_KEY;
+        }
+        var loggedUser = session.get(userSessionKey);
+
+        //check user already logged in
+        if(loggedUser == null){
+            //retrieving loging redirection uri
+            var loginRedirectionUri = appConf[constants.LOGIN_REDIRECTION_URI_KEY];
+            if(!loginRedirectionUri){
+                loginRedirectionUri = constants.DEFAULT_LOGIN_REDIRECTION_URI;
+            }
+            //dispatch redirection to login uri
+            response.sendRedirect(renderingData.context.appData.uri + loginRedirectionUri);
+            exit();
+        }
+        return "";
+    }
+
+    /**
      * 'defineZone' Handlebars helper function.
      * @param zoneName {string}
      * @param options {Object}
@@ -672,6 +699,9 @@ function registerHelpers(renderingData, lookupTable) {
         },
         js: function (path, options) {
             return resourceHelper("js", path, options)
+        },
+        authenticated: function () {
+            return authenticationHelper()
         },
         defineZone: defineZoneHelper
     });
