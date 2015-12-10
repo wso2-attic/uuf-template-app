@@ -1,8 +1,7 @@
 /**
  * Utils module.
  * @typedef {{parseBoolean: function, getConfigurations: function, getAppConfigurations: function,
- *     getLookupTable: function, getFileInUiComponent: function, getCurrentUser: function,
- *     setCurrentUser: function, getAppContext: function}} UtilsModule
+ *     getLookupTable: function, getFileInUiComponent: function}} UtilsModule
  */
 
 /**
@@ -21,13 +20,7 @@
  * The lookup table.
  * @typedef {{layouts: Object.<string, Layout>, pages: Object.<string, UIComponent>, uriPagesMap:
  *     Object.<string, string>, units: Object.<string, UIComponent>, pushedUnits: Object.<string,
- *     string[]>, uiComponents: Object.<string, UIComponent>}} LookupTable
- */
-
-/**
- * User data.
- * @typedef {{username: string, domain: string, tenantId: string, permissions: Object.<string,
- *     string>}} User
+ *     string[]>}} LookupTable
  */
 
 /**
@@ -68,29 +61,8 @@ var getLookupTable;
  */
 var getFileInUiComponent;
 
-/**
- * Returns the current logged-in user.
- * @returns {?User}
- */
-var getCurrentUser;
-
-/**
- * Sets the current user.
- * @param username {string} username
- * @param domain {string} domain
- * @param tenantId {string} tenant ID
- */
-var setCurrentUser;
-
-/**
- * Returns web app context path.
- * @param request {Object} HTTP request
- * @returns {string} context path
- */
-var getAppContext;
-
 (function () {
-    var log = new Log("utils");
+    var log = new Log("[utils]");
     var constants = require("constants.js").constants;
 
     /**
@@ -353,6 +325,7 @@ var getAppContext;
     }
 
     parseBoolean = function (obj, defaultValue) {
+        defaultValue = defaultValue || false;
         switch (typeof obj) {
             case 'boolean':
                 return obj;
@@ -362,91 +335,41 @@ var getAppContext;
                 var objLowerCased = obj.toLowerCase();
                 return ((objLowerCased == "true") || (objLowerCased == "yes"));
             default:
-                return (obj == null) ? ((defaultValue == null) ? false : defaultValue) : true;
+                return (obj) ? true : defaultValue;
         }
     };
 
     getConfigurations = function () {
-        var confFile = new File(constants.FILE_UUF_CONF);
-        if (!confFile.isExists() || confFile.isDirectory()) {
-            throw new Error("Unified UI framework configurations file '" + constants.FILE_UUF_CONF
-                            + "' does not exists.");
-        }
-
-        var cachedConf = application.get(constants.CACHE_KEY_UUF_CONF);
-        var updateCache = false;
-        if (cachedConf) {
-            var cachedConfFileLMD = parseInt(application.get(constants.CACHE_KEY_UUF_CONF_FILE_LMD));
-            var confFileLMD = parseInt(confFile.getLastModified());
-            if (confFileLMD > cachedConfFileLMD) {
-                updateCache = true;
-            }
-        } else {
-            updateCache = true;
-        }
-
-        if (updateCache) {
-            var conf = require(constants.FILE_UUF_CONF);
-            application.put(constants.CACHE_KEY_UUF_CONF, conf);
-            application.put(constants.CACHE_KEY_UUF_CONF_FILE_LMD,
-                            String(confFile.getLastModified()));
-            return conf;
-        } else {
-            return cachedConf;
-        }
+        // TODO: implement a proper caching mechanism
+        var configs = require(constants.FILE_LIB_CONF);
+        return configs;
     };
 
     getAppConfigurations = function () {
-        var appConfFile = new File(constants.FILE_APP_CONF);
-        if (!appConfFile.isExists() || appConfFile.isDirectory()) {
+        var appConfigFile = new File(constants.FILE_APP_CONF);
+        if (!appConfigFile.isExists() || appConfigFile.isDirectory()) {
             throw new Error("Application configurations file '" + constants.FILE_APP_CONF
                             + "' does not exists.");
         }
-
-        var cachedAppConf = application.get(constants.CACHE_KEY_APP_CONF);
-        var updateCache = false;
-        if (cachedAppConf) {
-            var cachedAppConfFileLMD = parseInt(application.get(constants.CACHE_KEY_APP_CONF_FILE_LMD));
-            var appConfFileLMD = parseInt(appConfFile.getLastModified());
-            if (appConfFileLMD > cachedAppConfFileLMD) {
-                updateCache = true;
-            }
-        } else {
-            updateCache = true;
-        }
-
-        if (updateCache) {
-            appConfFile.open("r");
-            var content = appConfFile.readAll();
-            var getProperty = require("process").getProperty;
-            content = content.replace(/\$\{server\.ip}/g, getProperty("carbon.local.ip"));
-            content = content.replace(/\$\{server\.http_port}/g, getProperty("carbon.http.port"));
-            content = content.replace(/\$\{server\.https_port}/g, getProperty("carbon.https.port"));
-            content = content.replace(/\$\{app\.context}/g, getAppContext(request));
-
-            var appConf = parse(content);
-            application.put(constants.CACHE_KEY_APP_CONF, appConf);
-            application.put(constants.CACHE_KEY_APP_CONF_FILE_LMD,
-                            String(appConfFile.getLastModified()));
-            return appConf;
-        } else {
-            return cachedAppConf;
-        }
+        // Following values are converted to here as an optimization.
+        var appConfigs = require(constants.FILE_APP_CONF);
+        appConfigs[constants.APP_CONF_CACHE_ENABLED] =
+            parseBoolean(appConfigs[constants.APP_CONF_CACHE_ENABLED], false);
+        appConfigs[constants.APP_CONF_DEBUGGING_ENABLED] =
+            parseBoolean(appConfigs[constants.APP_CONF_DEBUGGING_ENABLED], false);
+        // TODO: implement a proper caching mechanism
+        return appConfigs;
     };
 
     getLookupTable = function (configs) {
-        var isCachingEnabled = parseBoolean(configs[constants.APP_CONF_CACHE_ENABLED]);
-        if (isCachingEnabled) {
-            var cachedLookupTable = application.get(constants.CACHE_KEY_LOOKUP_TABLE);
-            if (cachedLookupTable) {
-                return cachedLookupTable;
-            }
+        var isCachingEnabled = configs[constants.APP_CONF_CACHE_ENABLED];
+        var cachedLookupTable = application.get(constants.CACHE_KEY_LOOKUP_TABLE);
+        if (isCachingEnabled && cachedLookupTable) {
+            return cachedLookupTable;
         }
 
         // layouts
         var layoutsData = getLayoutsData(constants.DIRECTORY_APP_LAYOUTS);
-
-        var allUiComponents = {};
 
         // units
         var unitsData = getUiComponentsData("unit", constants.DIRECTORY_APP_UNITS);
@@ -457,7 +380,6 @@ var getAppContext;
         for (var i = 0; i < numberOfUnits; i++) {
             var unit = unitsArray[i];
             unit.index = i;
-            allUiComponents[unit.fullName] = unit;
 
             if (unit.children.length != 0) {
                 // This unit is extended by one or more child unit(s).
@@ -469,7 +391,7 @@ var getAppContext;
                 throw new Error(validationData.message);
             }
             var unitDefinition = unit.definition;
-            if (unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]) {
+            if (unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLE]) {
                 // This unit is disabled.
                 continue;
             }
@@ -498,7 +420,6 @@ var getAppContext;
         for (var k = 0; k < numberOfPages; k++) {
             var page = pagesArray[k];
             page.index = k + startingIndex;
-            allUiComponents[page.fullName] = page;
 
             if (page.children.length != 0) {
                 // This page is extended by one or more child page(s).
@@ -510,7 +431,7 @@ var getAppContext;
                 throw new Error(validationData.message);
             }
             var pageDefinition = page.definition;
-            if (pageDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]) {
+            if (pageDefinition[constants.UI_COMPONENT_DEFINITION_DISABLE]) {
                 // This page is disabled.
                 continue;
             }
@@ -530,14 +451,13 @@ var getAppContext;
             pages: pagesData.map,
             uriPagesMap: uriPagesMap,
             units: unitsData.map,
-            pushedUnits: pushedUnits,
-            uiComponents: allUiComponents
+            pushedUnits: pushedUnits
         };
         application.put(constants.CACHE_KEY_LOOKUP_TABLE, lookupTable);
         return lookupTable;
     };
 
-    getFileInUiComponent = function (uiComponent, relativeFilePath, lookupTable) {
+    getFileInUiComponent = function (uiComponent, uiComponentType, relativeFilePath, lookupTable) {
         if (relativeFilePath.charAt(0) != "/") {
             relativeFilePath = "/" + relativeFilePath;
         }
@@ -547,11 +467,11 @@ var getAppContext;
             return file;
         }
 
-        var uiComponents = lookupTable.uiComponents;
+        var components = (uiComponentType == "unit") ? lookupTable.units : lookupTable.pages;
         var parentUiComponentsFullNames = uiComponent.parents;
         var numberOfParentUiComponents = parentUiComponentsFullNames.length;
         for (var i = 0; i < numberOfParentUiComponents; i++) {
-            var parentUiComponent = uiComponents[parentUiComponentsFullNames[i]];
+            var parentUiComponent = components[parentUiComponentsFullNames[i]];
             var parentFile = new File(parentUiComponent.path + relativeFilePath);
             if (parentFile.isExists() && !parentFile.isDirectory()) {
                 // Parent UI Component has the file.
@@ -560,43 +480,5 @@ var getAppContext;
         }
         // File does not exists.
         return null;
-    };
-
-    getCurrentUser = function () {
-        /** @type {User} */
-        var user = session.get(constants.CACHE_KEY_USER);
-        if (user && user.username) {
-            // load permissions
-            return user;
-        }
-        return null;
-    };
-
-    setCurrentUser = function (username, domain, tenantId) {
-        var carbon = require('carbon');
-        var userManager = new carbon.user.UserManager(new carbon.server.Server(), tenantId);
-        var permissionRootPath = getAppConfigurations()[constants.APP_CONF_PERMISSION_ROOT];
-        if (!permissionRootPath) {
-            permissionRootPath = "/";
-        }
-        var permissions = userManager.getAllowedUIResources(username, permissionRootPath);
-        var numberOfPermissions = permissions.length;
-        var permissionsMap = {};
-        for (var i = 0; i < numberOfPermissions; i++) {
-            permissionsMap[permissions[i]] = "ui-execute";
-        }
-        /** @type {User} */
-        var user = {
-            username: username,
-            domain: domain,
-            tenantId: tenantId,
-            permissions: permissionsMap
-        };
-        session.put(constants.CACHE_KEY_USER, user);
-    };
-
-    getAppContext = function (request) {
-        var requestContextPath = request.getContextPath();
-        return (requestContextPath == "/") ? "" : requestContextPath;
     };
 })();
