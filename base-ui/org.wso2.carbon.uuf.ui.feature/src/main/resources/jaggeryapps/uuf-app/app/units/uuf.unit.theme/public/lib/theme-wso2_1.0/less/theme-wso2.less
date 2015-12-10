@@ -18,14 +18,13 @@
  * default values
  * ======================================================================== */
 
-@font-face {.font( 'Roboto'; 300; 'normal'; 'Roboto Light'; 'Roboto-Light-webfont' )}
+@font-face {.font( 'Roboto'; 300; 'normal'; 'Roboto Light'; 'Roboto-Light-webfont'; '../fonts' )}
 
 @font-default: 'Roboto Light', Arial, Helvetica, sans-serif;
 @font-icons: 'font-wso2';
 @font-default-weight: 300;
 @border-radius-default: 0;
 @box-shadow-default: none;
-@font-weight-header: 400;
 
 @sides: top, bottom, left, right;
 @screen-sizes: xs, sm, md, lg;
@@ -53,9 +52,6 @@
 @footer-height: 40px;
 @footer-background: @base-dark-color;
 @footer-color: #cbcbcb;
-@footer-font-size: 12px;
-@footer-letter-spacing: 1px;
-@footer-font-weight: 500;
 
 @inverse-layout-background: @primary-color;
 @inverse-layout-color: @base-light-color;
@@ -131,9 +127,9 @@
 	background-image: linear-gradient(@origin, @start, @stop);
 }
 
-.font(@font; @font-weight; @font-style; @font-name; @file-name;){
+.font(@font; @font-weight; @font-style; @font-name; @file-name; @font-path;){
         
-    @font-file:'../fonts/@{font}/@{file-name}';
+    @font-file:'@{font-path}/@{font}/@{file-name}';
         
     font-family: @font-name;
     font-style: @font-style;
@@ -616,7 +612,7 @@ header .brand {
     & h1 {
         display: inline-block;
         line-height: 1;
-        font-weight: @font-weight-header;
+        font-weight: 500;
         font-size: 17px;
         margin: 0 0 0 5px;
         color: @base-light-color;
@@ -991,9 +987,6 @@ footer {
     overflow: hidden;
     color: @footer-color;
     background: @footer-background;
-    font-size: @footer-font-size;
-    letter-spacing: @footer-letter-spacing;
-    font-weight: @footer-font-weight;
     z-index: 1000;
 }
 

@@ -1,17 +1,41 @@
 {
-    "displayName": "UUF Template App",
-    "cachingEnabled": false,
+    "appName": "UUF Template App",
+    "cachingEnabled": true,
     "debuggingEnabled": false,
-    "logLevel": "debug",
-    "welcomeFile": "",
-    "errorPages": [
-        {
-            "code": "500",
-            "path": "/error/server.hbs"
+    "permissionRoot": "/",
+    "loginUri": "${app.context}/signin",
+    "adminServicesUrl": "https://${server.ip}:${server.https_port}/admin/services/",
+    "authModule": {
+        "enabled": true,
+        "login": {
+            "onSuccess": {
+                "script": "/app/modules/login.js",
+                "page": "uuf.page.home"
+            },
+            "onFail": {
+                "script": "/app/modules/login.js",
+                "page": "uuf.page.sign-in"
+            }
         },
-        {
-            "code": "404",
-            "path": "/client/not-found.hbs"
+        "logout": {
+            "onSuccess": {
+                "script": "/app/modules/logout.js",
+                "page": "uuf.page.sign-in"
+            },
+            "onFail": {
+                "script": "/app/modules/logout.js",
+                "page": "uuf.page.home"
+            }
+        },
+        "sso": {
+            "enabled": false,
+            "issuer": "mdm",
+            "responseSigningEnabled": true,
+            "keyStoreName": "repository/resources/security/wso2carbon.jks",
+            "keyStorePassword": "wso2carbon",
+            "identityProviderAlias": "wso2carbon",
+            "identityProviderUrl": "https://${server.ip}:${server.https_port}/samlsso",
+            "intermediatePage": "uuf.page.sso-intermediate"
         }
-    ]
+    }
 }

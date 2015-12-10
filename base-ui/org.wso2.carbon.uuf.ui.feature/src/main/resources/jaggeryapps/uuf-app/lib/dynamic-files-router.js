@@ -1,9 +1,9 @@
 /**
  * Page rendering data.
  * @typedef {{
- *     context: {appData: {name: string, uri: string}, uriData: {uri: string, params:
- *     Object.<string, string>}}, pageData: {page: UIComponent, pageUri: string},
- *     zonesTree: ZoneTree, renderedUnits: string[]}} RenderingData
+ *     context: {appData: {name: string, context: string, conf: Object}, uriData: {uri:
+ *     string, params: Object.<string, string>}, user: User}, pageData: {page: UIComponent,
+ *     pageUri: string}, zonesTree: ZoneTree, renderedUnits: string[]}} RenderingData
  */
 
 /**
@@ -14,7 +14,8 @@
 var route;
 
 (function () {
-    var log = new Log("[dynamic-file-router]");
+    var log = new Log("dynamic-file-router");
+    var constants = require("constants.js").constants;
     /** @type {UtilsModule} */
     var Utils = require("utils.js");
 
@@ -57,6 +58,69 @@ var route;
     }
 
     /**
+     * Whether the specified page is processable or not.
+     * @param pageData {{page: UIComponent, pageUri: string}} data of the page to be checked
+     * @param user {User} current user
+     * @param appConfigs {Object} application configurations
+     * @param request {Object} HTTP request
+     * @param response {Object} HTTP response
+     * @return {boolean} <code>true</code> if processable, otherwise <code>false</code>
+     */
+    function isPageProcessable(pageData, user, appConfigs, request, response) {
+        var pageDefinition = pageData.page.definition;
+        if (Utils.parseBoolean(pageDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED], false)) {
+            // This page is disabled.
+            response.sendError(404, "Requested page '" + pageData.pageUri + "' does not exists.");
+            return false;
+        }
+
+        if (Utils.parseBoolean(pageDefinition[constants.PAGE_DEFINITION_IS_ANONYMOUS], false)) {
+            // This is an anonymous page. So no need for an user session or checking permissions.
+            return true;
+        } else {
+            // This is not an anonymous page.
+            if (user) {
+                // An user has logged in.
+                var pagePermissions = pageDefinition[constants.UI_COMPONENT_DEFINITION_PERMISSIONS];
+                if (pagePermissions && Array.isArray(pagePermissions)) {
+                    // A permissions array is specified in the page definition.
+                    var numberOfUnitPermissions = pagePermissions.length;
+                    var userPermissionsMap = user.permissions;
+                    for (var i = 0; i < numberOfUnitPermissions; i++) {
+                        if (!userPermissionsMap.hasOwnProperty(pagePermissions[i])) {
+                            // User does not have this permission.
+                            if (log.isDebugEnabled()) {
+                                log.debug("User '" + user.username + "' in domain '" + user.domain
+                                          + "' does not have permission '" + pagePermissions[i]
+                                          + "' to view page '" + pageData.page.fullName + "'.");
+                            }
+                            response.sendError(403, "You do not have enough permissions to access "
+                                                    + "the requested page '" + pageData.pageUri
+                                                    + "'.");
+                            return false;
+                        }
+                    }
+                    // User has all permissions.
+                    return true;
+                } else {
+                    // Permissions are not specified in the page definition.
+                    return true;
+                }
+            } else {
+                // Currently no user has logged in. So redirect to the login page.
+                var loginUri = appConfigs[constants.APP_CONF_LOGIN_URI];
+                if (!loginUri) {
+                    loginUri = Utils.getAppContext(request) + "/";
+                }
+                var redirectUri = loginUri + "?" + constants.URL_PARAM_REFERER + "="
+                                  + request.getRequestURL();
+                response.sendRedirect(encodeURI(redirectUri));
+                return false;
+            }
+        }
+    }
+
+    /**
      *
      * @param renderingData {RenderingData} page rendering data
      * @param lookupTable {LookupTable} lookup table
@@ -81,10 +145,9 @@ var route;
      *
      * @param renderingData {RenderingData} page rendering data
      * @param lookupTable {LookupTable} lookup table
-     * @param handlebarsEnvironment {Object} Handlebars environment
      * @param response {Object} HTTP response
      */
-    function renderPage(renderingData, lookupTable, handlebarsEnvironment, response) {
+    function renderPage(renderingData, lookupTable, response) {
         var page = renderingData.pageData.page;
         var buffer = ['{{#page "', page.fullName, '"}}'];
         var pushedUnitsHbsTemplate = getPushedUnitsHandlebarsTemplate(renderingData, lookupTable);
@@ -94,7 +157,8 @@ var route;
         buffer.push('{{/page}}');
 
         try {
-            var compiledTemplate = handlebarsEnvironment.compile(buffer.join(""));
+            var handlebars = getHandlebarsEnvironment(renderingData, lookupTable);
+            var compiledTemplate = handlebars.compile(buffer.join(""));
             response.addHeader("Content-type", "text/html");
             // We don't want web browsers to cache dynamic HTML pages.
             // Adopted from http://stackoverflow.com/a/2068407/1577286
@@ -104,18 +168,16 @@ var route;
             print(compiledTemplate({}));
         } catch (e) {
             if ((typeof e) == "string") {
-                //JS "throw message" type errors
+                // JS "throw message" type errors
                 log.error(e);
                 response.sendError(500, e);
             } else {
                 if (e.stack) {
-                    //Java/Rhino Exceptions
-                    log.error(e);
+                    // Java/Rhino Exceptions
+                    log.error(e.message, e);
                     response.sendError(500, e.message);
                 } else if (e.message) {
-                    //JS "throw new Error(message)" type errors
-                    var err = new Error();
-                    log.info(err.stack);
+                    // JS "throw new Error(message)" type errors
                     log.error(e.message);
                     response.sendError(500, e.message);
                 }
@@ -124,14 +186,13 @@ var route;
     }
 
     route = function (request, response) {
-        var appConf = Utils.getAppConfigurations();
+        var configurations = Utils.getConfigurations();
         /** @type {LookupTable} */
-        var lookupTable = Utils.getLookupTable(appConf);
+        var lookupTable = Utils.getLookupTable(configurations);
 
-        // lets assume URL looks like https://my.domain.com/appName/{one}/{two}/{three}/{four}
-        var requestUri = request.getRequestURI(); // = /appName/{one}/{two}/{three}/{four}
-        var positionOfSecondSlash = requestUri.indexOf("/", 1);
-        var pageUri = requestUri.substring(positionOfSecondSlash); // /{one}/{two}/{three}/{four}
+        // Lets assume URL looks like https://my.domain.com/appName/{foo}/{bar}/...
+        var requestUri = request.getRequestURI(); // /appName/{foo}/{bar}/...
+        var pageUri = requestUri.substring(requestUri.indexOf("/", 1)); // /{foo}/{bar}/...
 
         var pageData = getPageData(pageUri, lookupTable);
         // TODO: decide whether this page or its furthest child is rendered
@@ -140,17 +201,25 @@ var route;
             return;
         }
 
+        var currentUser = Utils.getCurrentUser();
+        var appConfigurations = Utils.getAppConfigurations();
+        if (!isPageProcessable(pageData, currentUser, appConfigurations, request, response)) {
+            return;
+        }
+
         /** @type {RenderingData} */
         var renderingData = {
             context: {
                 appData: {
-                    name: requestUri.substring(1, positionOfSecondSlash),
-                    uri: request.getContextPath()
+                    name: appConfigurations[constants.APP_CONF_APP_NAME],
+                    context: Utils.getAppContext(request),
+                    conf: appConfigurations
                 },
                 uriData: {
                     uri: requestUri,
                     params: pageData.uriParams
-                }
+                },
+                user: currentUser
             },
             pageData: {
                 page: pageData.page,
@@ -160,8 +229,7 @@ var route;
             zonesTree: null,
             renderedUnits: []
         };
-        var handlebarsEnvironment = getHandlebarsEnvironment(renderingData, lookupTable);
-        renderPage(renderingData, lookupTable, handlebarsEnvironment, response);
+        renderPage(renderingData, lookupTable, response);
         //print(stringify(renderingData));
     };
 })();
