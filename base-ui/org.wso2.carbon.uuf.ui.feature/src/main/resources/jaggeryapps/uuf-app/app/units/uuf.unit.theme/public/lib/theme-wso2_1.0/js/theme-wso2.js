@@ -319,6 +319,9 @@ var responsiveTextRatio = 0.2,
                         '</ul>'
                     );
 
+                    //Remove advance operations table toolbar
+                    $('.dataTable.no-operations').closest('.dataTables_wrapper').find('.dataTablesTop .dataTables_toolbar').html('');
+
                     //Sorting dropdown menu select function
                     $('.dataTables_wrapper .sort-list li a').click(function() {
                         $(this).closest('li').siblings('li').find('a').removeClass('sorting_asc').removeClass('sorting_desc');
