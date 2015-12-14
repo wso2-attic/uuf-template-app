@@ -11,32 +11,10 @@
 var route;
 
 (function () {
-    var log = new Log("[static-file-router]");
+    var log = new Log("static-file-router");
     var constants = require("constants.js").constants;
     /** @type {UtilsModule} */
     var Utils = require("utils.js");
-
-    /**
-     * Returns the boolean value of the specified object.
-     * @param obj {Object} object to be converted to boolean
-     * @param {boolean} [defaultValue=false] if <code>obj</code> is <code>null</code> or
-     *     <code>undefined</code> then this values is returned
-     * @return {boolean} boolean value of the parsed object
-     */
-    function parseBoolean(obj, defaultValue) {
-        defaultValue = defaultValue || false;
-        switch (typeof obj) {
-            case 'boolean':
-                return obj;
-            case 'number':
-                return (obj > 0);
-            case 'string':
-                var objLowerCased = obj.toLowerCase();
-                return ((objLowerCased == "true") || (objLowerCased == "yes"));
-            default:
-                return (obj) ? true : defaultValue;
-        }
-    }
 
     /**
      * Splits a full file name to its name and extension.
@@ -91,23 +69,55 @@ var route;
 
     /**
      * Initializes and returns the LESS compiler.
+     * @param lookupTable {LookupTable} lookup table
      * @returns {Object} LESS compiler
      */
-    function getLessCompiler() {
-        var less = require(constants.LIBRARY_LESS).less;
+    function getLessCompiler(lookupTable) {
+        var less = require(constants.MODULE_LESS).less;
         // Adopted from https://github.com/less/less.js/blob/v1.7.5/lib/less/rhino.js#L89
         less.Parser.fileLoader = function (file, currentFileInfo, callback, env) {
-            var href = file;
-
-            if (currentFileInfo && currentFileInfo.currentDirectory && !/^\//.test(file)) {
-                href = less.modules.path.join(currentFileInfo.currentDirectory, file);
+            var lessFilePath, lessFile;
+            if (currentFileInfo && currentFileInfo.currentDirectory && (file.charAt(0) != "/")) {
+                // File path does not start with '/', indicates a relative path.
+                lessFilePath = less.modules.path.join(currentFileInfo.currentDirectory, file);
+                lessFile = new File(lessFilePath);
             }
-            var path = less.modules.path.dirname(href);
+            if (/{{.+}}/.test(file)) {
+                // File path has '{{uiComponentFullName}}'.
+                var startIndex = file.indexOf("{{");
+                var endIndex = file.indexOf("}}", (startIndex + 2));
+                var uiComponentFullName = file.substr((startIndex + 2), (endIndex - 2));
+                var uiComponent = lookupTable.uiComponents[uiComponentFullName];
+                if (!uiComponent) {
+                    callback({
+                        type: 'UI Component',
+                        message: "UI Component '" + uiComponentFullName
+                                 + "' mentioned in file '" + file + "' cannot be found."
+                    });
+                    return;
+                }
+                var relativePath = constants.DIRECTORY_APP_UNIT_PUBLIC + file.substr(endIndex + 2);
+                lessFile = Utils.getFileInUiComponent(uiComponent, relativePath, lookupTable);
+                if (!lessFile) {
+                    callback({
+                        type: 'File',
+                        message: "File '" + relativePath + "' cannot be found in UI Component '"
+                                 + uiComponent.fullName + "'."
+                    });
+                    return;
+                }
+                lessFilePath = lessFile.getPath();
+            }
+            if (!lessFilePath) {
+                lessFilePath = file;
+                lessFile = new File(file);
+            }
+
+            var path = less.modules.path.dirname(lessFilePath);
             var newFileInfo = {
                 currentDirectory: path,
-                filename: href
+                filename: lessFilePath
             };
-
             if (currentFileInfo) {
                 newFileInfo.entryPath = currentFileInfo.entryPath;
                 newFileInfo.rootpath = currentFileInfo.rootpath;
@@ -116,10 +126,9 @@ var route;
             } else {
                 newFileInfo.entryPath = path;
                 newFileInfo.rootpath = less.rootpath || path;
-                newFileInfo.rootFilename = href;
+                newFileInfo.rootFilename = lessFilePath;
                 newFileInfo.relativeUrls = env.relativeUrls;
             }
-
             var j = file.lastIndexOf('/');
             if (newFileInfo.relativeUrls && !/^(?:[a-z-]+:|\/)/.test(file) && j != -1) {
                 var relativeSubDirectory = file.slice(0, j + 1);
@@ -128,24 +137,24 @@ var route;
             }
 
             var data = null;
-            var f = new File(href);
             try {
-                f.open('r');
-                data = f.readAll();
+                lessFile.open('r');
+                data = lessFile.readAll();
             } catch (e) {
+                log.error("", e);
                 callback({
                     type: 'File',
-                    message: "Cannot read '" + href + "' file."
+                    message: "Cannot read '" + lessFilePath + "' file."
                 });
                 return;
             } finally {
-                closeQuietly(f);
+                closeQuietly(lessFile);
             }
 
             try {
-                callback(null, data, href, newFileInfo, {lastModified: 0});
+                callback(null, data, lessFilePath, newFileInfo, {lastModified: 0});
             } catch (e) {
-                callback(e, null, href);
+                callback(e, null, lessFilePath);
             }
         };
 
@@ -162,9 +171,9 @@ var route;
      */
     function parseLessResource(lessResource, lessCompiler, isCachingEnabled) {
         var lessFile = lessResource.file;
-        var unit = lessResource.provider;
-        // cached CSS file name pattern: {unitFullName}_{cssFileName}.css
-        var cachedFilePath = [constants.DIRECTORY_CACHE, "/", unit.fullName, "_",
+        var uiComponent = lessResource.provider;
+        // cached CSS file name pattern: {uiComponentFullName}_{cssFileName}.css
+        var cachedFilePath = [constants.DIRECTORY_CACHE, "/", uiComponent.fullName, "_",
                               splitFileName(lessFile.getName()).name, ".css"].join("");
         var cachedFile = new File(cachedFilePath);
         var rv = {success: true, message: "Success", cssFile: cachedFile};
@@ -215,8 +224,9 @@ var route;
             if (error) {
                 // something went wrong when processing the LESS file
                 rv.success = false;
-                rv.message = "Failed to process '" + lessFile.getPath() + "' file due to "
-                             + stringify(error);
+                rv.message = "Failed to process '" + lessFile.getPath() + "' file due to '"
+                             + error.message + "' happened in file '" + error.filename
+                             + "' at line " + error.line + ".";
                 rv.cssFile = null;
                 return;
             }
@@ -229,13 +239,12 @@ var route;
                 rv.success = false;
                 rv.message = "Cannot write to cached CSS file '" + cachedFilePath + ".";
                 rv.cssFile = null;
-                log.error(e);
+                //log.error(e);
             } finally {
                 closeQuietly(cachedFile);
             }
         };
-        var globalVars = {"unit-class": unit.shortName};
-        lessParser.parse(lessCode, callback, {globalVars: globalVars});
+        lessParser.parse(lessCode, callback, {globalVars: {}});
 
         return rv;
     }
@@ -254,10 +263,10 @@ var route;
         var requestedResources = [];
         var hashCodeBuffer = [];
 
-        var unitPublicDir = constants.DIRECTORY_APP_UNIT_PUBLIC;
+        var uiComponentPublicDirectory = constants.DIRECTORY_APP_UNIT_PUBLIC;
         var numberOfRequestedResourcesUris = requestedResourcesUris.length;
-        var units = lookupTable.units;
-        var getFileInUnit = utils.getFileInUiComponent;
+        var uiComponents = lookupTable.uiComponents;
+        var getFileInUiComponent = utils.getFileInUiComponent;
         for (var i = 0; i < numberOfRequestedResourcesUris; i++) {
             var requestedResourceUri = requestedResourcesUris[i];
             if (requestedResourceUri.length == 0) {
@@ -273,49 +282,51 @@ var route;
                     // An invalid resource URI.
                     rv.success = false;
                     rv.status = 400;
-                    rv.message = "Requested resource URI '" + requestedResourceUri
-                                 + "' is invalid.";
+                    rv.message =
+                        "Requested resource URI '" + requestedResourceUri + "' is invalid.";
                     return rv;
                 case 2:
-                    // An invalid resource URI. parts = [{unitFullName}, {fileName}]
+                    // An invalid resource URI. parts = [{uiComponentFullName}, {fileName}]
                     rv.success = false;
                     rv.status = 400;
                     rv.message = "Request resource URI '" + requestedResourceUri + "' is invalid. "
-                                 + "Uncategorized resources in unit's public directory are restricted.";
+                                 + "Uncategorized resources inside the 'public' directory of "
+                                 + "an UI Component are restricted.";
                     return rv;
                 default:
-                    // requestedResource = {unitFullName}/{sub-directory}/{+filePath}
+                    // requestedResource = {uiComponentFullName}/{sub-directory}/{+filePath}
                     // For valid URIs : parts.length >= 3
-                    // parts = ["unitFullName", "sub-directory", ... ]
+                    // parts = ["uiComponentFullName", "sub-directory", ... ]
                     hashCodeBuffer.push(requestedResourceUri);
             }
 
-            var providerUnitFullName = parts[0];
-            var providerUnit = lookupTable.units[providerUnitFullName];
-            if (!providerUnit) {
+            var uiComponentFullName = parts[0];
+            var uiComponent = uiComponents[uiComponentFullName];
+            if (!uiComponent) {
                 rv.success = false;
                 rv.status = 404;
-                rv.message = "Request unit '" + providerUnitFullName + "' does not exists.";
+                rv.message =
+                    "Requested UI Component '" + uiComponentFullName + "' does not exists.";
                 return rv;
             }
 
             var resourceType = splitFileName(parts[numberOfParts - 1]).extension;
-            var relativeFilePath = unitPublicDir
-                                   + requestedResourceUri.substr(providerUnitFullName.length);
-            var resourceFile = getFileInUnit(providerUnit, "unit", relativeFilePath, lookupTable);
+            var relativeFilePath = uiComponentPublicDirectory
+                                   + requestedResourceUri.substr(uiComponentFullName.length);
+            var resourceFile = getFileInUiComponent(uiComponent, relativeFilePath, lookupTable);
             if (resourceFile) {
                 requestedResources.push({
                     type: resourceType,
                     file: resourceFile,
-                    provider: providerUnit
+                    provider: uiComponent
                 });
             } else {
                 // Requested file either does not exists or it is a directory.
                 rv.success = false;
                 rv.status = 404;
                 rv.message = "Requested resource '" + relativeFilePath
-                             + "' does not exists in unit '" + providerUnit.fullName
-                             + "' or its parents " + stringify(providerUnit.parents) + ".";
+                             + "' does not exists in UI Component '" + uiComponent.fullName
+                             + "' or its parents " + stringify(uiComponent.parents) + ".";
                 return rv;
             }
         }
@@ -342,9 +353,10 @@ var route;
      * @param combinedFile {Object} combined file
      * @param requestedResources {StaticResource[]} resources
      * @param isCachingEnabled {boolean} whether caching is enabled or not
+     * @param lookupTable {LookupTable} lookup table
      * @return {{success: boolean, message: string}} combined file updating result
      */
-    function updateCombinedFile(combinedFile, requestedResources, isCachingEnabled) {
+    function updateCombinedFile(combinedFile, requestedResources, isCachingEnabled, lookupTable) {
         var rv = {success: true, message: "Success"};
         try {
             combinedFile.open('w');
@@ -362,7 +374,7 @@ var route;
             var processingFile;
             if (processingResource.type == "less") {
                 if (!lessCompiler) {
-                    lessCompiler = getLessCompiler()
+                    lessCompiler = getLessCompiler(lookupTable)
                 }
                 var lessRenderingResult = parseLessResource(processingResource, lessCompiler,
                                                             isCachingEnabled);
@@ -447,13 +459,12 @@ var route;
     }
 
     route = function (request, response) {
-        var appConf = Utils.getAppConfigurations();
+        var appConfigs = Utils.getAppConfigurations();
         /** @type {LookupTable} */
-        var lookupTable = Utils.getLookupTable(appConf);
+        var lookupTable = Utils.getLookupTable(appConfigs);
 
-        // URI = /{appName}/public/[{unitFullName}/{resourceType}/{+filePath},...]
+        // URI = /{appName}/public/[{uiComponentFullName}/{resourceType}/{+filePath},...]
         var uri = decodeURIComponent(request.getRequestURI());
-        // {unitFullName}/{resourceType}/{+filePath},{unitFullName}/{resourceType}/{+filePath},...
         var rawResourcesString = uri.substr(nthIndexOf(uri, "/", 3) + 1);
         if (rawResourcesString.length == 0) {
             // An invalid URI.
@@ -464,7 +475,7 @@ var route;
         }
 
         // separate resources
-        var resourcesString = rawResourcesString.split(constants.COMBINED_RESOURCES_URI_TAIL)[0];
+        var resourcesString = rawResourcesString.split(constants.COMBINED_RESOURCES_URL_TAIL)[0];
         var requestedResourcesUris = resourcesString.split(constants.COMBINED_RESOURCES_SEPARATOR);
         if (requestedResourcesUris.length == 0) {
             // An invalid URI.
@@ -492,8 +503,8 @@ var route;
             return;
         }
 
-        var noCacheParam = parseBoolean(request.getParameter("nocache"), false);
-        var cachingEnabledConfig = appConf[constants.APP_CONF_CACHE_ENABLED];
+        var noCacheParam = Utils.parseBoolean(request.getParameter("nocache"), false);
+        var cachingEnabledConfig = Utils.parseBoolean(appConfigs[constants.APP_CONF_CACHE_ENABLED]);
         var isCachingEnabled = (!noCacheParam && cachingEnabledConfig);
 
         if (numberOfRequestedResources == 1) {
@@ -501,7 +512,7 @@ var route;
             var resource = requestedResources[0];
             var servingFile;
             if (resource.type == "less") {
-                var lessRenderingResult = parseLessResource(resource, getLessCompiler(),
+                var lessRenderingResult = parseLessResource(resource, getLessCompiler(lookupTable),
                                                             isCachingEnabled);
                 if (!lessRenderingResult.success) {
                     log.error(lessRenderingResult.message);
@@ -539,7 +550,7 @@ var route;
 
         if (updateCachedFile) {
             var cachedFileUpdateData = updateCombinedFile(cachedFile, requestedResources,
-                                                          isCachingEnabled);
+                                                          isCachingEnabled, lookupTable);
             if (!cachedFileUpdateData.success) {
                 log.error(cachedFileUpdateData.message);
                 response.sendError(500, cachedFileUpdateData.message);

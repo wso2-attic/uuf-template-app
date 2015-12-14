@@ -1,3 +1,6 @@
 function onRequest(context) {
-    return {showRememberMe: true, showCreateAccount: true};
+    return {
+        message: request.getParameter("error"),
+        referer: request.getParameter("referer")
+    };
 }

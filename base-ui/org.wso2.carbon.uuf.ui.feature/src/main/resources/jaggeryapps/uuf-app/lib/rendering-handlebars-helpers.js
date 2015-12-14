@@ -5,10 +5,12 @@
  * @return {Object} Handlebars environment
  */
 function registerHelpers(renderingData, lookupTable) {
-    var log = new Log("[rendering-handlebars-helpers]");
+    var log = new Log("rendering-handlebars-helpers");
     var constants = require("constants.js").constants;
     /** @type {UtilsModule} */
     var Utils = require("utils.js");
+    var parseBoolean = Utils.parseBoolean;
+    var getFurthestChild = Utils.getFurthestChild;
 
     var dataStructures = require("data-structures.js");
     var Zone = dataStructures.Zone;
@@ -26,7 +28,7 @@ function registerHelpers(renderingData, lookupTable) {
         processingZones: [],
         processingDefZones: []
     };
-    var handlebarsEnvironment = require(constants.LIBRARY_HANDLEBARS).Handlebars;
+    var handlebarsEnvironment = require(constants.MODULE_HANDLEBARS).Handlebars;
 
     /**
      * Compares two UI Components based on their 'index' values.
@@ -99,90 +101,6 @@ function registerHelpers(renderingData, lookupTable) {
     }
 
     /**
-     * Returns script file path and 'super' script object of the specified UI component.
-     * @param uiComponent {UIComponent} UI component to be processed
-     * @param uiComponentType {string} type of the UI component, either "unit" or "page"
-     * @param lookupTable {LookupTable} lookup table
-     * @return {{scriptFilePath: string, super: Object}} script file path and 'super' script object
-     */
-    function getUiComponentScriptData(uiComponent, uiComponentType, lookupTable) {
-        var parentComponentsFullNames = uiComponent.parents;
-        var numberOfParentComponents = parentComponentsFullNames.length;
-        var scriptFunctionName = constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST;
-        var components = (uiComponentType == "unit") ? lookupTable.units : lookupTable.pages;
-
-        // If this UI component has a script file with 'onRequest' function, then get it.
-        var componentScriptFilePath = uiComponent.scriptFilePath;
-        var scriptFilePath = null;
-        if (componentScriptFilePath) {
-            var componentScript = require(componentScriptFilePath);
-            if (componentScript.hasOwnProperty(scriptFunctionName)) {
-                scriptFilePath = componentScriptFilePath;
-            }
-        }
-
-        // Otherwise, get the script with 'onRequest' function from the nearest parent.
-        // Meanwhile construct the 'super' object.
-        var superScript = {};
-        var currentSuperScript = superScript;
-        for (var i = 0; i < numberOfParentComponents; i++) {
-            var parentScriptFilePath = components[parentComponentsFullNames[i]].scriptFilePath;
-            if (parentScriptFilePath) {
-                var parentScript = require(parentScriptFilePath);
-                if (parentScript.hasOwnProperty(scriptFunctionName)) {
-                    if (!scriptFilePath) {
-                        scriptFilePath = parentScriptFilePath;
-                    }
-                    currentSuperScript[scriptFunctionName] = parentScript[scriptFunctionName];
-                } else {
-                    currentSuperScript[scriptFunctionName] = null;
-                }
-            } else {
-                currentSuperScript[scriptFunctionName] = null;
-            }
-            currentSuperScript.super = {};
-            currentSuperScript = currentSuperScript.super;
-        }
-
-        return {scriptFilePath: scriptFilePath, super: superScript};
-    }
-
-    /**
-     * Returns the processing unit of the specified unit.
-     * @param parentUnit {UIComponent} unit mentioned in the template
-     * @param lookupTable {LookupTable} lookup table
-     * @return {UIComponent} processing unit
-     */
-    function getFurthestChildUnit(parentUnit, lookupTable) {
-        if (parentUnit.children.length == 0) {
-            // This unit has no children.
-            return parentUnit;
-        }
-
-        /** @type {UIComponent} */
-        var furthestChild = null;
-        var furthestChildDistance = -1;
-        var parentUnitFullName = parentUnit.fullName;
-        var units = lookupTable.units;
-        var childrenUnitsFullNames = parentUnit.children;
-        var numberOfChildrenUnits = childrenUnitsFullNames.length;
-        for (var i = 0; i < numberOfChildrenUnits; i++) {
-            var childUnit = units[childrenUnitsFullNames[i]];
-            var distance = childUnit.parents.indexOf(parentUnitFullName);
-            if (furthestChildDistance < distance) {
-                furthestChildDistance = distance;
-                furthestChild = childUnit;
-            } else if (furthestChildDistance == distance) {
-                log.warn("Child unit '" + furthestChild.fullName + "' and '" + childUnit.fullName
-                         + "' are in the same distance (" + distance + ") from their parent unit '"
-                         + parentUnitFullName + "'. Hence child unit '" + childUnit.fullName
-                         + "' was ignored when calculating the furthest child unit.");
-            }
-        }
-        return furthestChild;
-    }
-
-    /**
      *
      * @param resources {Resource[]} resources
      * @return {string[]}
@@ -204,7 +122,7 @@ function registerHelpers(renderingData, lookupTable) {
             var firstResourceType = sortedResources[0].type;
             var extension = (firstResourceType == "less") ? "css" : firstResourceType;
             var crp = combiningResourcesPaths.join(constants.COMBINED_RESOURCES_SEPARATOR);
-            singleResourcesPaths.push(crp + constants.COMBINED_RESOURCES_URI_TAIL + extension);
+            singleResourcesPaths.push(crp + constants.COMBINED_RESOURCES_URL_TAIL + extension);
         }
         return singleResourcesPaths;
     }
@@ -212,68 +130,148 @@ function registerHelpers(renderingData, lookupTable) {
     /**
      * Whether the specified unit is processable or not.
      * @param unit {UIComponent} unit to be checked
+     * @param user {User} current user
      * @return {boolean} <code>true</code> if processable, otherwise <code>false</code>
      */
-    function isUnitProcessable(unit) {
-        var isDisabled = Utils.parseBoolean(unit.definition[constants.UI_COMPONENT_DEFINITION_DISABLE],
-                                            false);
-        // TODO: also check permissions
-        return !isDisabled;
+    function isUnitProcessable(unit, user) {
+        var unitDefinition = unit.definition;
+        if (parseBoolean(unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED], false)) {
+            return false;
+        }
+
+        var unitPermissions = unitDefinition[constants.UI_COMPONENT_DEFINITION_PERMISSIONS];
+        if (user && unitPermissions && Array.isArray(unitPermissions)) {
+            var numberOfUnitPermissions = unitPermissions.length;
+            var userPermissionsMap = user.permissions;
+            for (var i = 0; i < numberOfUnitPermissions; i++) {
+                if (!userPermissionsMap.hasOwnProperty(unitPermissions[i])) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("User '" + user.username + "' in domain '" + user.domain
+                                  + "' does not have permission '" + unitPermissions[i]
+                                  + "' to view unit '" + unit.fullName + "'.");
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
-     *
+     * Executes the JS script of the specified UI Component and returns the result.
      * @param uiComponent {UIComponent} UI component to be processed
-     * @param uiComponentType {string} type of the UI component, either "unit" or "page"
-     * @param scriptData {{scriptFilePath: string, super: Object}}
      * @param scriptContext {Object} script context
      * @param lookupTable {LookupTable} lookup table
      * @returns {Object} return value
      */
-    function executeScript(uiComponent, uiComponentType, scriptData, scriptContext, lookupTable) {
-        var script = require(scriptData.scriptFilePath);
-        script.super = scriptData.super;
-        script.getFile = function (relativeFilePath) {
-            return Utils.getFileInUiComponent(uiComponent, uiComponentType, relativeFilePath,
-                                              lookupTable);
-        };
-        var rv = script[constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST](scriptContext);
-        return (rv) ? rv : {};
+    function executeScript(uiComponent, scriptContext, lookupTable) {
+        var scriptFunctionName = constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST;
+        var uiComponents = lookupTable.uiComponents;
+
+        // If this UI component has a script file with 'onRequest' function, then get it.
+        var componentScriptFilePath = uiComponent.scriptFilePath;
+        var scriptFilePath = null;
+        if (componentScriptFilePath) {
+            var componentScript = require(componentScriptFilePath);
+            if (componentScript.hasOwnProperty(scriptFunctionName)) {
+                scriptFilePath = componentScriptFilePath;
+            }
+        }
+
+        // Otherwise, get the script with 'onRequest' function from the nearest parent.
+        // Meanwhile construct the 'super' object.
+        var superScript = {};
+        var currentSuperScript = superScript;
+        var parentComponentsFullNames = uiComponent.parents;
+        var numberOfParentComponents = parentComponentsFullNames.length;
+        for (var i = 0; i < numberOfParentComponents; i++) {
+            var parentScriptFilePath = uiComponents[parentComponentsFullNames[i]].scriptFilePath;
+            if (parentScriptFilePath) {
+                var parentScript = require(parentScriptFilePath);
+                if (parentScript.hasOwnProperty(scriptFunctionName)) {
+                    if (!scriptFilePath) {
+                        scriptFilePath = parentScriptFilePath;
+                    }
+                    currentSuperScript[scriptFunctionName] = parentScript[scriptFunctionName];
+                } else {
+                    currentSuperScript[scriptFunctionName] = null;
+                }
+            } else {
+                currentSuperScript[scriptFunctionName] = null;
+            }
+            currentSuperScript.super = {};
+            currentSuperScript = currentSuperScript.super;
+        }
+
+        if (!scriptFilePath) {
+            // No script found.
+            return {};
+        }
+
+        try {
+            var script = require(scriptFilePath);
+            script.super = superScript;
+            script.getFile = function (relativeFilePath) {
+                return Utils.getFileInUiComponent(uiComponent, relativeFilePath, lookupTable);
+            };
+            var rv = script[constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST](scriptContext);
+            return (rv) ? rv : {};
+        } catch (e) {
+            log.error("An exception thrown when executing the script '" + scriptFilePath + "'.");
+            throw e;
+        }
     }
 
     /**
      * 'page' Handlebars helper function.
-     * @param pageFullName {string}
+     * @param mentionedPageFullName {string}
      * @param options {Object}
      * @return {string} empty string
      */
-    function pageHelper(pageFullName, options) {
+    function pageHelper(mentionedPageFullName, options) {
         var pages = lookupTable.pages;
-        var page = pages[pageFullName];
+        var mentionedPage = pages[mentionedPageFullName];
+        if (!mentionedPage) {
+            var msg = "Page '" + mentionedPageFullName + "' does not exists.";
+            log.error(msg);
+            throw new Error(msg);
+        }
 
-        // Context values.
-        var appName = renderingData.context.appData.name;
-        var appContext = renderingData.context.appData.uri;
-        var uriParams = renderingData.context.uriData.params;
+        var processingPage = getFurthestChild(mentionedPage, lookupTable);
+        if (log.isDebugEnabled() && (mentionedPage.fullName != processingPage.fullName)) {
+            log.debug("Page '" + processingPage.fullName + "' is processed for page '"
+                      + mentionedPage.fullName + "'.");
+        }
 
         // Start processing page.
-        runtimeData.currentPage = page;
-        var pageScriptData = getUiComponentScriptData(page, "page", lookupTable);
-        var templateContext = null;
-        if (pageScriptData.scriptFilePath) {
-            var scriptContext = {
-                app: {name: appName, context: appContext},
-                uriParams: uriParams,
-                handlebars: handlebarsEnvironment
-            };
-            templateContext = executeScript(page, "page", pageScriptData, scriptContext,
-                                            lookupTable);
-        }
+        runtimeData.currentPage = processingPage;
+
+        // Execute the script and get the template context.
+        var appName = renderingData.context.appData.name;
+        var appContext = renderingData.context.appData.context;
+        var appConf = renderingData.context.appData.conf;
+        var optionsHash = options.hash;
+        var optionsHashParams = optionsHash[constants.HELPER_PARAM_PARAMS];
+        var pageParams = (optionsHashParams) ? optionsHashParams : optionsHash;
+        var pagePublicUri = renderingData.context.appData.context + "/"
+                            + constants.DIRECTORY_APP_UNIT_PUBLIC + "/" + processingPage.fullName;
+        var uriParams = renderingData.context.uriData.params;
+        var user = renderingData.context.user;
+        var scriptContext = {
+            app: {name: appName, context: appContext, conf: appConf},
+            page: {params: pageParams, publicUri: pagePublicUri},
+            uriParams: uriParams,
+            user: user,
+            handlebars: handlebarsEnvironment
+        };
+        var templateContext = executeScript(processingPage, scriptContext, lookupTable);
         // Additional parameters to the template context.
         var templateOptions = {
             data: {
-                app: {name: appName, context: appContext},
-                uriParams: uriParams
+                app: {name: appName, context: appContext, conf: appConf},
+                page: {params: pageParams, publicUri: pagePublicUri},
+                uriParams: uriParams,
+                user: user
             }
         };
 
@@ -283,19 +281,19 @@ function registerHelpers(renderingData, lookupTable) {
             options.fn(templateContext, templateOptions);
         }
         // Get this page's template.
-        var pageTemplateFilePath = page.templateFilePath;
+        var pageTemplateFilePath = processingPage.templateFilePath;
         if (pageTemplateFilePath) {
             var pageContent = readFile(pageTemplateFilePath);
             if (!pageContent) {
                 var msg = "Cannot read template '" + pageTemplateFilePath + "' of page '"
-                          + page.fullName + "'.";
+                          + processingPage.fullName + "'.";
                 log.error(msg);
                 throw new Error(msg);
             }
             handlebarsEnvironment.compile(pageContent)(templateContext, templateOptions);
         }
         // Process parents' templates from nearest to furthest.
-        var parentPagesFullNames = page.parents;
+        var parentPagesFullNames = processingPage.parents;
         var numberOfParentPages = parentPagesFullNames.length;
         for (var i = 0; i < numberOfParentPages; i++) {
             var parentPage = pages[parentPagesFullNames[i]];
@@ -312,21 +310,23 @@ function registerHelpers(renderingData, lookupTable) {
                 handlebarsEnvironment.compile(parentPageContent)(templateContext, templateOptions);
             }
         }
-        runtimeData.currentPage = page;
+        runtimeData.currentPage = processingPage;
 
         // Process layout.
-        var layoutPath = lookupTable.layouts[page.definition[constants.PAGE_DEFINITION_LAYOUT]].path;
+        var layoutName = processingPage.definition[constants.PAGE_DEFINITION_LAYOUT];
+        var layoutPath = lookupTable.layouts[layoutName].path;
         var layoutContent = readFile(layoutPath);
         if (!layoutContent) {
-            var msg = "Cannot read layout '" + layoutPath + "' of page '" + page.fullName + "'.";
+            var msg = "Cannot read layout '" + layoutName + "' from path '" + layoutPath
+                      + "' of page '" + processingPage.fullName + "'.";
             log.error(msg);
             throw new Error(msg);
         }
-        var pageHtml = handlebarsEnvironment.compile(layoutContent)({});
+        var html = handlebarsEnvironment.compile(layoutContent)(templateContext, templateOptions);
         runtimeData.currentPage = null;
         // Finished processing page.
 
-        return pageHtml;
+        return html;
     }
 
     /**
@@ -344,30 +344,16 @@ function registerHelpers(renderingData, lookupTable) {
             throw new Error(msg);
         }
 
-        var processingUnit = getFurthestChildUnit(mentionedUnit, lookupTable);
-        if (!isUnitProcessable(processingUnit)) {
-            if (log.isDebugEnabled()) {
-                log.debug("Unit '" + processingUnit.fullName + "' is disabled.");
-            }
+        var processingUnit = getFurthestChild(mentionedUnit, lookupTable);
+        var currentUser = renderingData.context.user;
+        if (!isUnitProcessable(processingUnit, currentUser)) {
             return new handlebarsEnvironment.SafeString("");
         }
-        if (log.isDebugEnabled()) {
-            if (mentionedUnit.fullName != processingUnit.fullName) {
-                log.debug("Unit '" + processingUnit.fullName + "' is processed for unit '"
-                          + mentionedUnit.fullName + "'.");
-            }
-        }
 
-        // Context values.
-        var appName = renderingData.context.appData.name;
-        var appContext = renderingData.context.appData.uri;
-        var unitCssClass = "unit-" + processingUnit.fullName;
-        var optionsHash = options.hash;
-        var optionsHashUnitParams = optionsHash[constants.HELPER_PARAM_UNIT_PARAMS];
-        var unitParams = (optionsHashUnitParams) ? optionsHashUnitParams : optionsHash;
-        var unitPublicUri = renderingData.context.appData.uri + "/"
-                            + constants.DIRECTORY_APP_UNIT_PUBLIC + "/" + processingUnit.fullName;
-        var uriParams = renderingData.context.uriData.params;
+        if (log.isDebugEnabled() && (mentionedUnit.fullName != processingUnit.fullName)) {
+            log.debug("Unit '" + processingUnit.fullName + "' is processed for unit '"
+                      + mentionedUnit.fullName + "'.");
+        }
 
         var processingUnitsStack = runtimeData.processingUnits;
         // Backup current 'zones' stack and set a new stack.
@@ -379,24 +365,33 @@ function registerHelpers(renderingData, lookupTable) {
 
         // Start processing unit 'processingUnit'.
         processingUnitsStack.push(processingUnit);
-        var unitScriptData = getUiComponentScriptData(processingUnit, "unit", lookupTable);
-        var templateContext = null;
-        if (unitScriptData.scriptFilePath) {
-            var scriptContext = {
-                app: {name: appName, context: appContext},
-                unit: {cssClass: unitCssClass, params: unitParams, publicUri: unitPublicUri},
-                uriParams: uriParams,
-                handlebars: handlebarsEnvironment
-            };
-            templateContext = executeScript(processingUnit, "unit", unitScriptData, scriptContext,
-                                            lookupTable);
-        }
+
+        // Execute the script and get the template context.
+        var appName = renderingData.context.appData.name;
+        var appContext = renderingData.context.appData.context;
+        var appConf = renderingData.context.appData.conf;
+        var optionsHash = options.hash;
+        var optionsHashParams = optionsHash[constants.HELPER_PARAM_PARAMS];
+        var unitParams = (optionsHashParams) ? optionsHashParams : optionsHash;
+        var unitPublicUri = renderingData.context.appData.context + "/"
+                            + constants.DIRECTORY_APP_UNIT_PUBLIC + "/" + processingUnit.fullName;
+        var uriParams = renderingData.context.uriData.params;
+        var user = renderingData.context.user;
+        var scriptContext = {
+            app: {name: appName, context: appContext, conf: appConf},
+            unit: {params: unitParams, publicUri: unitPublicUri},
+            uriParams: uriParams,
+            user: user,
+            handlebars: handlebarsEnvironment
+        };
+        var templateContext = executeScript(processingUnit, scriptContext, lookupTable);
         // Additional parameters to the template context.
         var templateOptions = {
             data: {
-                app: {name: appName, context: appContext},
-                unit: {cssClass: unitCssClass, params: unitParams, publicUri: unitPublicUri},
-                uriParams: uriParams
+                app: {name: appName, context: appContext, conf: appConf},
+                unit: {params: unitParams, publicUri: unitPublicUri},
+                uriParams: uriParams,
+                user: user
             }
         };
 
@@ -497,7 +492,7 @@ function registerHelpers(renderingData, lookupTable) {
             parentZoneContent.addSubZoneContent(zoneName, currentZoneContent);
         }
 
-        var isOverride = Utils.parseBoolean(options.hash[constants.HELPER_PARAM_OVERRIDE], true);
+        var isOverride = parseBoolean(options.hash[constants.HELPER_PARAM_OVERRIDE], true);
         zonesStack.push(currentZoneContent);
         currentZoneContent.isOverridden = isOverride;
         currentZoneContent.addContent(options.fn(this));
@@ -527,35 +522,8 @@ function registerHelpers(renderingData, lookupTable) {
 
         var mainZone = renderingData.zonesTree.getTopLevelZone(zonesStack[0].zoneName);
         var resourcePath = resourceProvider.fullName + "/" + path;
-        var isCombine = Utils.parseBoolean(options.hash[constants.HELPER_PARAM_COMBINE], true);
+        var isCombine = parseBoolean(options.hash[constants.HELPER_PARAM_COMBINE], true);
         mainZone.addResource(type, resourceProvider, resourcePath, isCombine);
-        return "";
-    }
-
-    /**
-     * 'authenticated' Handlebars helper function.
-     * @returns {string} empty string
-     */
-    function authenticationHelper(){
-        var appConf = Utils.getAppConfigurations();
-        //retrieving user session key
-        var userSessionKey = appConf[constants.USER_SESSION_KEY];
-        if(!userSessionKey){
-            userSessionKey = constants.DEFAULT_USER_SESSION_KEY;
-        }
-        var loggedUser = session.get(userSessionKey);
-
-        //check user already logged in
-        if(loggedUser == null){
-            //retrieving loging redirection uri
-            var loginRedirectionUri = appConf[constants.LOGIN_REDIRECTION_URI_KEY];
-            if(!loginRedirectionUri){
-                loginRedirectionUri = constants.DEFAULT_LOGIN_REDIRECTION_URI;
-            }
-            //dispatch redirection to login uri
-            response.sendRedirect(renderingData.context.appData.uri + loginRedirectionUri);
-            exit();
-        }
         return "";
     }
 
@@ -577,7 +545,7 @@ function registerHelpers(renderingData, lookupTable) {
                 var mainZoneBuffer = [];
                 // First process resources in this main-zone.
                 if (mainZone.hasResources()) {
-                    var publicUri = renderingData.context.appData.uri + "/"
+                    var publicUri = renderingData.context.appData.context + "/"
                                     + constants.DIRECTORY_APP_UNIT_PUBLIC + "/";
                     var resourcesBuffer = [];
                     var cssResources = mainZone.getResources("css");
@@ -699,9 +667,6 @@ function registerHelpers(renderingData, lookupTable) {
         },
         js: function (path, options) {
             return resourceHelper("js", path, options)
-        },
-        authenticated: function () {
-            return authenticationHelper()
         },
         defineZone: defineZoneHelper
     });
