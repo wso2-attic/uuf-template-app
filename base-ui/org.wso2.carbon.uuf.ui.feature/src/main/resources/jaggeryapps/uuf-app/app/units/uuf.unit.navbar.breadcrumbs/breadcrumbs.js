@@ -1,11 +1,11 @@
 function onRequest(context) {
     var mappingsFile = getFile("private/mappings.json");
     if (!mappingsFile) {
-        return null;
+        return {};
     }
 
     var requestUri = request.getRequestURI(); // /appName/{one}/{two}/{three}/{four}
-    var pageUri = requestUri.substring(1 + context.app.name.length); // /{one}/{two}/{three}/{four}
+    var pageUri = requestUri.substring(requestUri.indexOf("/", 1)); // /{one}/{two}/{three}/{four}
     var uriMatcher = new URIMatcher(pageUri);
 
     var mappings = require(mappingsFile.getPath());
@@ -19,5 +19,5 @@ function onRequest(context) {
             };
         }
     }
-    return null;
+    return {};
 }
