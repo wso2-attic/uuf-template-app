@@ -275,11 +275,6 @@ function registerHelpers(renderingData, lookupTable) {
             }
         };
 
-        // If has inner HTMl, then process it.
-        if (options.fn) {
-            // {{#page "pageName"}} {{#zone "_pushedUnits"}} ... {{/zone}} {{/page}}
-            options.fn(templateContext, templateOptions);
-        }
         // Get this page's template.
         var pageTemplateFilePath = processingPage.templateFilePath;
         if (pageTemplateFilePath) {
@@ -311,6 +306,11 @@ function registerHelpers(renderingData, lookupTable) {
             }
         }
         runtimeData.currentPage = processingPage;
+        // If has inner HTMl, then process it.
+        if (options.fn) {
+            // {{#page "pageName"}} {{#zone "_pushedUnits"}} ... {{/zone}} {{/page}}
+            options.fn(templateContext, templateOptions);
+        }
 
         // Process layout.
         var layoutName = processingPage.definition[constants.PAGE_DEFINITION_LAYOUT];
