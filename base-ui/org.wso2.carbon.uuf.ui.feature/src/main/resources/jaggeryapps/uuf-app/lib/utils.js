@@ -360,54 +360,6 @@ var getAppContext;
         return {map: uiComponentsMap, array: uiComponentsList};
     }
 
-    /**
-     *
-     * @param uiComponent {UIComponent} UI component
-     * @param relativeFilePath {string} relative path
-     * @param uiComponents {UIComponent[]} lookup table
-     * @return {Object} file
-     */
-    function getFileFromChildren(uiComponent, relativeFilePath, uiComponents) {
-        var childUiComponentsFullNames = uiComponent.children;
-        var numberOfChildUiComponents = childUiComponentsFullNames.length;
-        for (var i = 0; i < numberOfChildUiComponents; i++) {
-            var childUiComponent = uiComponents[childUiComponentsFullNames[i]];
-            var childFile = new File(childUiComponent.path + relativeFilePath);
-            if (childFile.isExists() && !childFile.isDirectory()) {
-                return childFile;
-            } else {
-                childFile = getFileFromChildren(childUiComponent, relativeFilePath, uiComponents);
-                if (childFile) {
-                    return childFile;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     *
-     * @param uiComponent {UIComponent} UI component
-     * @param relativeFilePath {string} relative path
-     * @param uiComponents {UIComponent[]} lookup table
-     * @return {Object} file
-     */
-    function getFileFromParents(uiComponent, relativeFilePath, uiComponents) {
-        var parentUiComponentsFullNames = uiComponent.parents;
-        var numberOfParentUiComponents = parentUiComponentsFullNames.length;
-        for (var i = 0; i < numberOfParentUiComponents; i++) {
-            var parentUiComponent = uiComponents[parentUiComponentsFullNames[i]];
-            var parentFile = new File(parentUiComponent.path + relativeFilePath);
-            if (parentFile.isExists() && !parentFile.isDirectory()) {
-                // Parent UI Component has the file.
-                return parentFile;
-            }
-        }
-
-        return null;
-    }
-
     parseBoolean = function (obj, defaultValue) {
         switch (typeof obj) {
             case 'boolean':
@@ -646,19 +598,27 @@ var getAppContext;
         if (relativeFilePath.charAt(0) != "/") {
             relativeFilePath = "/" + relativeFilePath;
         }
-        var file = new File(uiComponent.path + relativeFilePath);
+        var childUiComponent = getFurthestChild(uiComponent, lookupTable);
+
+        var file = new File(childUiComponent.path + relativeFilePath);
         if (file.isExists() && !file.isDirectory()) {
-            // This UI components has the file.
+            // Furthest child UI components has the file.
             return file;
         }
 
         var uiComponents = lookupTable.uiComponents;
-        file = getFileFromParents(uiComponent, relativeFilePath, uiComponents);
-        if (file) {
-            return file;
+        var parentUiComponentsFullNames = childUiComponent.parents;
+        var numberOfParentUiComponents = parentUiComponentsFullNames.length;
+        for (var i = 0; i < numberOfParentUiComponents; i++) {
+            var parentUiComponent = uiComponents[parentUiComponentsFullNames[i]];
+            var parentFile = new File(parentUiComponent.path + relativeFilePath);
+            if (parentFile.isExists() && !parentFile.isDirectory()) {
+                // Parent UI Component has the file.
+                return parentFile;
+            }
         }
 
-        return getFileFromChildren(uiComponent, relativeFilePath, uiComponents);
+        return null;
     };
 
     getCurrentUser = function () {
