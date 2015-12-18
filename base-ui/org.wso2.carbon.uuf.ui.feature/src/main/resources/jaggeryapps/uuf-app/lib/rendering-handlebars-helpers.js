@@ -292,7 +292,6 @@ function registerHelpers(renderingData, lookupTable) {
         var numberOfParentPages = parentPagesFullNames.length;
         for (var i = 0; i < numberOfParentPages; i++) {
             var parentPage = pages[parentPagesFullNames[i]];
-            runtimeData.currentPage = parentPage;
             var parentPageTemplateFilePath = parentPage.templateFilePath;
             if (parentPageTemplateFilePath) {
                 var parentPageContent = readFile(parentPageTemplateFilePath);
@@ -305,7 +304,6 @@ function registerHelpers(renderingData, lookupTable) {
                 handlebarsEnvironment.compile(parentPageContent)(templateContext, templateOptions);
             }
         }
-        runtimeData.currentPage = processingPage;
         // If has inner HTMl, then process it.
         if (options.fn) {
             // {{#page "pageName"}} {{#zone "_pushedUnits"}} ... {{/zone}} {{/page}}
@@ -467,10 +465,6 @@ function registerHelpers(renderingData, lookupTable) {
             var zonesTree = renderingData.zonesTree;
             var mainZone = zonesTree.getTopLevelZone(zoneName);
             if (mainZone) {
-                if (mainZone.owner.fullName != currentPage.fullName) {
-                    // This zone already filled (owned) by a previously processed page.
-                    return "";
-                }
                 var mainZoneContentsOfProvider = mainZone.getContents(contentProvider.fullName);
                 if (mainZoneContentsOfProvider
                     && mainZoneContentsOfProvider[mainZoneContentsOfProvider.length
