@@ -1,34 +1,29 @@
-/**
- * Returns the Handlebars environment.
- * @param renderingData {RenderingData} rendering data
- * @param lookupTable {LookupTable} lookup table
- * @return {Object} Handlebars environment
- */
-function registerHelpers(renderingData, lookupTable) {
-    var log = new Log("rendering-handlebars-helpers");
-    var constants = require("constants.js").constants;
-    /** @type {UtilsModule} */
-    var Utils = require("utils.js");
-    var parseBoolean = Utils.parseBoolean;
-    var getFurthestChild = Utils.getFurthestChild;
+var render;
 
-    var dataStructures = require("data-structures.js");
+(function () {
+    var log = new Log("handlebars-module");
+    var constants = require("/lib/constants.js").constants;
+    var utils = require("/lib/utils.js").utils;
+    var parseBoolean = utils.parseBoolean;
+    var getFurthestChild = utils.getFurthestChild;
+
+    var dataStructures = require("/lib/modules/handlebars/data-structures.js");
     var Zone = dataStructures.Zone;
     var ZoneContent = dataStructures.ZoneContent;
-    renderingData.zonesTree = new dataStructures.ZoneTree();
 
+    /** @type {UIComponent[]} */
+    var uiComponentsStack = [];
+    /** @type {ZoneContent[]} */
+    var zoneContentsStack = [];
+    /** @type {ZoneContent[]} */
+    var defZoneContentsStack = [];
+    /** @type {Object.<string, Zone>} */
+    var mainZones = {};
     /**
-     * Holds runtime data.
-     * @type {{currentPage: UIComponent, processingUnits: UIComponent[], processingZones:
-     *     ZoneContent[], processingDefZones: ZoneContent[]}}
+     * Handlebars environment.
+     * @type {Object}
      */
-    var runtimeData = {
-        currentPage: null,
-        processingUnits: [],
-        processingZones: [],
-        processingDefZones: []
-    };
-    var handlebarsEnvironment = require(constants.MODULE_HANDLEBARS).Handlebars;
+    var handlebarsEnvironment;
 
     /**
      * Compares two UI Components based on their 'index' values.
@@ -65,37 +60,28 @@ function registerHelpers(renderingData, lookupTable) {
             file.open("r");
             return file.readAll();
         } catch (e) {
-            log.error(e);
+            log.error(e.message, e);
             return null;
         } finally {
             try {
                 file.close();
             } catch (ee) {
-                log.error(ee);
+                log.error(ee.message, ee);
             }
         }
     }
 
     /**
      * Returns the currently processing UI Component.
-     * @param runtimeData {Object} runtime data
      * @returns {?UIComponent} currently processing UI Component
      */
-    function getProcessingUiComponent(runtimeData) {
-        var currentPage = runtimeData.currentPage;
-        if (currentPage) {
-            // inside a page
-            var unitsStack = runtimeData.processingUnits;
-            var unitsStackSize = unitsStack.length;
-            if (unitsStackSize > 0) {
-                // inside an unit
-                return unitsStack[unitsStackSize - 1];
-            } else {
-                // inside a page, but outside any unit
-                return currentPage;
-            }
+    function getProcessingUiComponent() {
+        var uiComponentsStackSize = uiComponentsStack.length;
+        if (uiComponentsStackSize > 0) {
+            // Inside an UI Component.
+            return uiComponentsStack[uiComponentsStackSize - 1];
         } else {
-            // outside of page
+            // Not inside an UI Component.
             return null;
         }
     }
@@ -134,39 +120,55 @@ function registerHelpers(renderingData, lookupTable) {
      * @return {boolean} <code>true</code> if processable, otherwise <code>false</code>
      */
     function isUnitProcessable(unit, user) {
-        var unitDefinition = unit.definition;
-        if (parseBoolean(unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED], false)) {
+        if (unit.disabled) {
+            // This unit is disabled.
             return false;
         }
 
-        var unitPermissions = unitDefinition[constants.UI_COMPONENT_DEFINITION_PERMISSIONS];
-        if (user && unitPermissions && Array.isArray(unitPermissions)) {
-            var numberOfUnitPermissions = unitPermissions.length;
-            var userPermissionsMap = user.permissions;
-            for (var i = 0; i < numberOfUnitPermissions; i++) {
-                if (!userPermissionsMap.hasOwnProperty(unitPermissions[i])) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("User '" + user.username + "' in domain '" + user.domain
-                                  + "' does not have permission '" + unitPermissions[i]
-                                  + "' to view unit '" + unit.fullName + "'.");
-                    }
-                    return false;
-                }
-            }
+        var unitDefinition = unit.definition;
+        if (utils.parseBoolean(unitDefinition[constants.UI_COMPONENT_DEFINITION_IS_ANONYMOUS])) {
+            // This is an anonymous unit. So no need for an user session or checking permissions.
+            return true;
         }
-        return true;
+
+        // This is not an anonymous unit.
+        if (user) {
+            // An user has logged in.
+            var unitPermissions = unitDefinition[constants.UI_COMPONENT_DEFINITION_PERMISSIONS];
+            if (unitPermissions && Array.isArray(unitPermissions)) {
+                // A permissions array is specified in the unit definition.
+                var numberOfUnitPermissions = unitPermissions.length;
+                var userPermissionsMap = user.permissions;
+                for (var i = 0; i < numberOfUnitPermissions; i++) {
+                    if (!userPermissionsMap.hasOwnProperty(unitPermissions[i])) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("User '" + user.username + "' in domain '" + user.domain
+                                      + "' does not have permission '" + unitPermissions[i]
+                                      + "' to view unit '" + unit.fullName + "'.");
+                        }
+                        return false;
+                    }
+                }
+                // User has all permissions.
+                return true;
+            } else {
+                // Permissions are not specified in the unit definition.
+                return true;
+            }
+        } else {
+            // Currently no user has logged in.
+            return false;
+        }
     }
 
     /**
      * Executes the JS script of the specified UI Component and returns the result.
      * @param uiComponent {UIComponent} UI component to be processed
      * @param scriptContext {Object} script context
-     * @param lookupTable {LookupTable} lookup table
      * @returns {Object} return value
      */
-    function executeScript(uiComponent, scriptContext, lookupTable) {
+    function executeScript(uiComponent, scriptContext) {
         var scriptFunctionName = constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST;
-        var uiComponents = lookupTable.uiComponents;
 
         // If this UI component has a script file with 'onRequest' function, then get it.
         var componentScriptFilePath = uiComponent.scriptFilePath;
@@ -182,10 +184,10 @@ function registerHelpers(renderingData, lookupTable) {
         // Meanwhile construct the 'super' object.
         var superScript = {};
         var currentSuperScript = superScript;
-        var parentComponentsFullNames = uiComponent.parents;
-        var numberOfParentComponents = parentComponentsFullNames.length;
+        var parentComponents = uiComponent.parents;
+        var numberOfParentComponents = parentComponents.length;
         for (var i = 0; i < numberOfParentComponents; i++) {
-            var parentScriptFilePath = uiComponents[parentComponentsFullNames[i]].scriptFilePath;
+            var parentScriptFilePath = parentComponents[i].scriptFilePath;
             if (parentScriptFilePath) {
                 var parentScript = require(parentScriptFilePath);
                 if (parentScript.hasOwnProperty(scriptFunctionName)) {
@@ -212,7 +214,7 @@ function registerHelpers(renderingData, lookupTable) {
             var script = require(scriptFilePath);
             script.super = superScript;
             script.getFile = function (relativeFilePath) {
-                return Utils.getFileInUiComponent(uiComponent, relativeFilePath, lookupTable);
+                return utils.getFileInUiComponent(uiComponent, relativeFilePath);
             };
             var rv = script[constants.UI_COMPONENT_JS_FUNCTION_ON_REQUEST](scriptContext);
             return (rv) ? rv : {};
@@ -225,38 +227,46 @@ function registerHelpers(renderingData, lookupTable) {
     /**
      * 'page' Handlebars helper function.
      * @param mentionedPageFullName {string}
-     * @param options {Object}
+     * @param handlebarsOptions {Object}
+     * @param renderingContext {RenderingContext}
+     * @param lookupTable {LookupTable}
      * @return {string} empty string
      */
-    function pageHelper(mentionedPageFullName, options) {
-        var pages = lookupTable.pages;
-        var mentionedPage = pages[mentionedPageFullName];
+    function pageHelper(mentionedPageFullName, handlebarsOptions, renderingContext, lookupTable) {
+        var mentionedPage = lookupTable.pages[mentionedPageFullName];
         if (!mentionedPage) {
             var msg = "Page '" + mentionedPageFullName + "' does not exists.";
             log.error(msg);
             throw new Error(msg);
         }
 
-        var processingPage = getFurthestChild(mentionedPage, lookupTable);
+        var processingPage = getFurthestChild(mentionedPage);
         if (log.isDebugEnabled() && (mentionedPage.fullName != processingPage.fullName)) {
             log.debug("Page '" + processingPage.fullName + "' is processed for page '"
                       + mentionedPage.fullName + "'.");
         }
 
-        // Start processing page.
-        runtimeData.currentPage = processingPage;
+        // Backup current 'ZoneContent' stack and set a new stack.
+        var prevZoneContentsStack = zoneContentsStack;
+        zoneContentsStack = [];
+        // Backup current 'defineZoneContents' stack and set a new stack.
+        var prevDefZoneContentsStack = defZoneContentsStack;
+        defZoneContentsStack = [];
+
+        // Start processing page 'processingPage'.
+        uiComponentsStack.push(processingPage);
 
         // Execute the script and get the template context.
-        var appName = renderingData.context.appData.name;
-        var appContext = renderingData.context.appData.context;
-        var appConf = renderingData.context.appData.conf;
-        var optionsHash = options.hash;
+        var appName = "";
+        var appContext = renderingContext.app.context;
+        var appConf = renderingContext.app.conf;
+        var optionsHash = handlebarsOptions.hash;
         var optionsHashParams = optionsHash[constants.HELPER_PARAM_PARAMS];
         var pageParams = (optionsHashParams) ? optionsHashParams : optionsHash;
-        var pagePublicUri = renderingData.context.appData.context + "/"
-                            + constants.DIRECTORY_APP_UNIT_PUBLIC + "/" + processingPage.fullName;
-        var uriParams = renderingData.context.uriData.params;
-        var user = renderingData.context.user;
+        var pagePublicUri = appContext + "/" + constants.DIRECTORY_APP_UNIT_PUBLIC + "/"
+                            + processingPage.fullName;
+        var uriParams = renderingContext.uriParams;
+        var user = renderingContext.user;
         var scriptContext = {
             app: {name: appName, context: appContext, conf: appConf},
             page: {params: pageParams, publicUri: pagePublicUri},
@@ -264,7 +274,7 @@ function registerHelpers(renderingData, lookupTable) {
             user: user,
             handlebars: handlebarsEnvironment
         };
-        var templateContext = executeScript(processingPage, scriptContext, lookupTable);
+        var templateContext = executeScript(processingPage, scriptContext);
         // Additional parameters to the template context.
         var templateOptions = {
             data: {
@@ -285,13 +295,13 @@ function registerHelpers(renderingData, lookupTable) {
                 log.error(msg);
                 throw new Error(msg);
             }
-            handlebarsEnvironment.compile(pageContent)(templateContext, templateOptions);
+            compileTemplate(pageContent)(templateContext, templateOptions);
         }
         // Process parents' templates from nearest to furthest.
-        var parentPagesFullNames = processingPage.parents;
-        var numberOfParentPages = parentPagesFullNames.length;
+        var parentPages = processingPage.parents;
+        var numberOfParentPages = parentPages.length;
         for (var i = 0; i < numberOfParentPages; i++) {
-            var parentPage = pages[parentPagesFullNames[i]];
+            var parentPage = parentPages[i];
             var parentPageTemplateFilePath = parentPage.templateFilePath;
             if (parentPageTemplateFilePath) {
                 var parentPageContent = readFile(parentPageTemplateFilePath);
@@ -301,13 +311,13 @@ function registerHelpers(renderingData, lookupTable) {
                     log.error(msg);
                     throw new Error(msg);
                 }
-                handlebarsEnvironment.compile(parentPageContent)(templateContext, templateOptions);
+                compileTemplate(parentPageContent)(templateContext, templateOptions);
             }
         }
         // If has inner HTMl, then process it.
-        if (options.fn) {
+        if (handlebarsOptions.fn) {
             // {{#page "pageName"}} {{#zone "_pushedUnits"}} ... {{/zone}} {{/page}}
-            options.fn(templateContext, templateOptions);
+            handlebarsOptions.fn(templateContext, templateOptions);
         }
 
         // Process layout.
@@ -320,9 +330,12 @@ function registerHelpers(renderingData, lookupTable) {
             log.error(msg);
             throw new Error(msg);
         }
-        var html = handlebarsEnvironment.compile(layoutContent)(templateContext, templateOptions);
-        runtimeData.currentPage = null;
-        // Finished processing page.
+        var html = compileTemplate(layoutContent)(templateContext, templateOptions);
+        // Finished processing page 'processingPage'.
+
+        // Restore 'ZoneContents' stack and 'defineZoneContents' stack.
+        zoneContentsStack = prevZoneContentsStack;
+        defZoneContentsStack = prevDefZoneContentsStack;
 
         return html;
     }
@@ -330,20 +343,21 @@ function registerHelpers(renderingData, lookupTable) {
     /**
      * 'unit' Handlebars helper function.
      * @param mentionedUnitFullName {string}
-     * @param options {Object}
+     * @param handlebarsOptions {Object}
+     * @param renderingContext {RenderingContext}
+     * @param lookupTable {LookupTable}
      * @return {SafeString}
      */
-    function unitHelper(mentionedUnitFullName, options) {
-        var units = lookupTable.units;
-        var mentionedUnit = units[mentionedUnitFullName];
+    function unitHelper(mentionedUnitFullName, handlebarsOptions, renderingContext, lookupTable) {
+        var mentionedUnit = lookupTable.units[mentionedUnitFullName];
         if (!mentionedUnit) {
             var msg = "Unit '" + mentionedUnitFullName + "' does not exists.";
             log.error(msg);
             throw new Error(msg);
         }
 
-        var processingUnit = getFurthestChild(mentionedUnit, lookupTable);
-        var currentUser = renderingData.context.user;
+        var processingUnit = getFurthestChild(mentionedUnit);
+        var currentUser = renderingContext.user;
         if (!isUnitProcessable(processingUnit, currentUser)) {
             return new handlebarsEnvironment.SafeString("");
         }
@@ -353,28 +367,27 @@ function registerHelpers(renderingData, lookupTable) {
                       + mentionedUnit.fullName + "'.");
         }
 
-        var processingUnitsStack = runtimeData.processingUnits;
-        // Backup current 'zones' stack and set a new stack.
-        var prevProcessingZones = runtimeData.processingZones;
-        runtimeData.processingZones = [];
-        // Backup current 'defineZones' stack and set a new stack.
-        var prevProcessingDefZones = runtimeData.processingDefZones;
-        runtimeData.processingDefZones = [];
+        // Backup current 'ZoneContents' stack and set a new stack.
+        var prevZoneContentsStack = zoneContentsStack;
+        zoneContentsStack = [];
+        // Backup current 'defineZoneContents' stack and set a new stack.
+        var prevDefZoneContentsStack = defZoneContentsStack;
+        defZoneContentsStack = [];
 
         // Start processing unit 'processingUnit'.
-        processingUnitsStack.push(processingUnit);
+        uiComponentsStack.push(processingUnit);
 
         // Execute the script and get the template context.
-        var appName = renderingData.context.appData.name;
-        var appContext = renderingData.context.appData.context;
-        var appConf = renderingData.context.appData.conf;
-        var optionsHash = options.hash;
+        var appName = "";
+        var appContext = renderingContext.app.context;
+        var appConf = renderingContext.app.conf;
+        var optionsHash = handlebarsOptions.hash;
         var optionsHashParams = optionsHash[constants.HELPER_PARAM_PARAMS];
         var unitParams = (optionsHashParams) ? optionsHashParams : optionsHash;
-        var unitPublicUri = renderingData.context.appData.context + "/"
-                            + constants.DIRECTORY_APP_UNIT_PUBLIC + "/" + processingUnit.fullName;
-        var uriParams = renderingData.context.uriData.params;
-        var user = renderingData.context.user;
+        var unitPublicUri = appContext + "/" + constants.DIRECTORY_APP_UNIT_PUBLIC + "/"
+                            + processingUnit.fullName;
+        var uriParams = renderingContext.uriParamss;
+        var user = renderingContext.user;
         var scriptContext = {
             app: {name: appName, context: appContext, conf: appConf},
             unit: {params: unitParams, publicUri: unitPublicUri},
@@ -382,7 +395,7 @@ function registerHelpers(renderingData, lookupTable) {
             user: user,
             handlebars: handlebarsEnvironment
         };
-        var templateContext = executeScript(processingUnit, scriptContext, lookupTable);
+        var templateContext = executeScript(processingUnit, scriptContext);
         // Additional parameters to the template context.
         var templateOptions = {
             data: {
@@ -404,17 +417,16 @@ function registerHelpers(renderingData, lookupTable) {
                 log.error(msg);
                 throw new Error(msg);
             }
-            var unitCompiledTemplate = handlebarsEnvironment.compile(unitContent);
-            var unitHtml = unitCompiledTemplate(templateContext, templateOptions).trim();
+            var unitHtml = compileTemplate(unitContent)(templateContext, templateOptions).trim();
             if (unitHtml.length > 0) {
                 returningHtml = unitHtml;
             }
         }
         // Process parents' templates from nearest to furthest.
-        var parentUnitsFullNames = processingUnit.parents;
-        var numberOfParentUnits = parentUnitsFullNames.length;
+        var parentUnits = processingUnit.parents;
+        var numberOfParentUnits = parentUnits.length;
         for (var i = 0; i < numberOfParentUnits; i++) {
-            var parentUnit = units[parentUnitsFullNames[i]];
+            var parentUnit = parentUnits[i];
             var parentUnitTemplateFilePath = parentUnit.templateFilePath;
             if (parentUnitTemplateFilePath) {
                 var parentUnitContent = readFile(parentUnitTemplateFilePath);
@@ -424,7 +436,7 @@ function registerHelpers(renderingData, lookupTable) {
                     log.error(msg);
                     throw new Error(msg);
                 }
-                var parentUnitCompiledTemplate = handlebarsEnvironment.compile(parentUnitContent);
+                var parentUnitCompiledTemplate = compileTemplate(parentUnitContent);
                 var parentUnitHtml = parentUnitCompiledTemplate(templateContext,
                                                                 templateOptions).trim();
                 if ((returningHtml.length == 0) && (parentUnitHtml.length > 0)) {
@@ -433,13 +445,12 @@ function registerHelpers(renderingData, lookupTable) {
                 }
             }
         }
-        processingUnitsStack.pop();
-        renderingData.renderedUnits.push(processingUnit.fullName);
+        uiComponentsStack.pop();
         // Finished processing unit 'processingUnit'.
 
-        // Restore 'zones' stack and 'defineZones' stack.
-        runtimeData.processingZones = prevProcessingZones;
-        runtimeData.processingDefZones = prevProcessingDefZones;
+        // Restore 'ZoneContents' stack and 'defineZoneContents' stack.
+        zoneContentsStack = prevZoneContentsStack;
+        defZoneContentsStack = prevDefZoneContentsStack;
 
         return new handlebarsEnvironment.SafeString(returningHtml);
     }
@@ -447,50 +458,48 @@ function registerHelpers(renderingData, lookupTable) {
     /**
      * 'zone' Handlebars helper function.
      * @param zoneName {string}
-     * @param options {Object}
+     * @param handlebarsOptions {Object}
      * @return {string} empty string
      */
-    function zoneHelper(zoneName, options) {
-        var contentProvider = getProcessingUiComponent(runtimeData);
+    function zoneHelper(zoneName, handlebarsOptions) {
+        var contentProvider = getProcessingUiComponent();
         if (!contentProvider) {
-            // 'zone' helper is called outside of a page.
+            // 'zone' helper is called outside of an UI Component.
             return "";
         }
 
         var currentZoneContent;
-        var zonesStack = runtimeData.processingZones;
-        if (zonesStack.length == 0) {
-            // This is a top level main-zone.
-            var currentPage = runtimeData.currentPage;
-            var zonesTree = renderingData.zonesTree;
-            var mainZone = zonesTree.getTopLevelZone(zoneName);
+        var zoneContentsStackSize = zoneContentsStack.length;
+        if (zoneContentsStackSize == 0) {
+            // This is a main-zone.
+            var mainZone = mainZones[zoneName];
             if (mainZone) {
-                var mainZoneContentsOfProvider = mainZone.getContents(contentProvider.fullName);
-                if (mainZoneContentsOfProvider
-                    && mainZoneContentsOfProvider[mainZoneContentsOfProvider.length
-                                                  - 1].isOverridden) {
+                var mainZoneContents = mainZone.getContents(contentProvider.fullName);
+                if (mainZoneContents
+                    && mainZoneContents[mainZoneContents.length - 1].isOverridden) {
                     // Previously processed child of 'contentProvider' has overridden this main-zone
                     return "";
                 }
             } else {
-                mainZone = new Zone(zoneName, currentPage);
-                zonesTree.addTopLevelZone(mainZone);
+                mainZone = new Zone(zoneName);
+                mainZones[zoneName] = mainZone;
             }
             currentZoneContent = new ZoneContent(zoneName, contentProvider);
             mainZone.addContent(currentZoneContent);
         } else {
             // This is a sub-zone.
             // {{#zone "parentZoneName"}} ... {{#zone "subZoneName"}} ... {{/zone}} ... {{/zone}}
-            var parentZoneContent = zonesStack[zonesStack.length - 1];
+            var parentZoneContent = zoneContentsStack[zoneContentsStackSize - 1];
             currentZoneContent = new ZoneContent(zoneName, contentProvider);
             parentZoneContent.addSubZoneContent(zoneName, currentZoneContent);
         }
 
-        var isOverride = parseBoolean(options.hash[constants.HELPER_PARAM_OVERRIDE], true);
-        zonesStack.push(currentZoneContent);
+        var isOverride = parseBoolean(handlebarsOptions.hash[constants.HELPER_PARAM_OVERRIDE],
+                                      true);
+        zoneContentsStack.push(currentZoneContent);
         currentZoneContent.isOverridden = isOverride;
-        currentZoneContent.addContent(options.fn(this));
-        zonesStack.pop();
+        currentZoneContent.addContent(handlebarsOptions.fn(this));
+        zoneContentsStack.pop();
         return "";
     }
 
@@ -498,25 +507,24 @@ function registerHelpers(renderingData, lookupTable) {
      * 'resource' Handlebars helper function.
      * @param type {string} resource type
      * @param path {string} resource file path
-     * @param options {Object}
+     * @param handlebarsOptions {Object}
      * @returns {string} empty string
      */
-    function resourceHelper(type, path, options) {
-        var resourceProvider = getProcessingUiComponent(runtimeData);
+    function resourceHelper(type, path, handlebarsOptions) {
+        var resourceProvider = getProcessingUiComponent();
         if (!resourceProvider) {
-            // 'resource' helper is called outside of a page.
+            // 'resource' helper is called outside of an UI Component.
             throw new Error("'" + type
                             + "' Handlebars helper should be used inside a page or an unit.");
         }
-        var zonesStack = runtimeData.processingZones;
-        if (zonesStack.length != 1) {
+        if (zoneContentsStack.length != 1) {
             throw new Error("'" + type
-                            + "' Handlebars helper should be used inside a top level zone.");
+                            + "' Handlebars helper should be used inside a main-zone.");
         }
 
-        var mainZone = renderingData.zonesTree.getTopLevelZone(zonesStack[0].zoneName);
+        var mainZone = mainZones[zoneContentsStack[0].zoneName];
         var resourcePath = resourceProvider.fullName + "/" + path;
-        var isCombine = parseBoolean(options.hash[constants.HELPER_PARAM_COMBINE], true);
+        var isCombine = parseBoolean(handlebarsOptions.hash[constants.HELPER_PARAM_COMBINE], true);
         mainZone.addResource(type, resourceProvider, resourcePath, isCombine);
         return "";
     }
@@ -524,22 +532,22 @@ function registerHelpers(renderingData, lookupTable) {
     /**
      * 'defineZone' Handlebars helper function.
      * @param zoneName {string}
-     * @param options {Object}
+     * @param handlebarsOptions {Object}
+     * @param renderingContext {RenderingContext}
      * @return {SafeString}
      */
-    function defineZoneHelper(zoneName, options) {
-        var zoneHtml, optionsFn = options.fn;
+    function defineZoneHelper(zoneName, handlebarsOptions, renderingContext) {
+        var zoneHtml, optionsFn = handlebarsOptions.fn;
 
-        var zonesStack = runtimeData.processingDefZones;
-        var zonesStackSize = zonesStack.length;
-        if (zonesStackSize == 0) {
-            // This is a top level main-zone.
-            var mainZone = renderingData.zonesTree.getTopLevelZone(zoneName);
+        var defZoneContentsStackSize = defZoneContentsStack.length;
+        if (defZoneContentsStackSize == 0) {
+            // This is a main-zone.
+            var mainZone = mainZones[zoneName];
             if (mainZone) {
                 var mainZoneBuffer = [];
                 // First process resources in this main-zone.
                 if (mainZone.hasResources()) {
-                    var publicUri = renderingData.context.appData.context + "/"
+                    var publicUri = renderingContext.app.context + "/"
                                     + constants.DIRECTORY_APP_UNIT_PUBLIC + "/";
                     var resourcesBuffer = [];
                     var cssResources = mainZone.getResources("css");
@@ -565,17 +573,16 @@ function registerHelpers(renderingData, lookupTable) {
 
                 // Then process HTML contents of this main-zone.
                 var isInProtectedScope, childUnitFullName;
-                if (options.hash[constants.HELPER_PARAM_SCOPE] == "protected") {
+                if (handlebarsOptions.hash[constants.HELPER_PARAM_SCOPE] == "protected") {
                     // 'scope' parameter is specified with value 'protected' for this main-zone.
-                    var unitsStack = runtimeData.processingUnits;
-                    var unitsStackSize = unitsStack.length;
-                    if (unitsStackSize > 0) {
+                    var uiComponentsStackSize = uiComponentsStack.length;
+                    if (uiComponentsStackSize > 0) {
                         // Now we are inside an unit. Here 'scope' parameter can be used with
                         // 'defineZone' helper for main-zones.
                         isInProtectedScope = true;
                         // When processing a parent-unit, last element of the units stack contains
                         // its child-unit.
-                        childUnitFullName = unitsStack[unitsStackSize - 1].fullName;
+                        childUnitFullName = uiComponentsStack[uiComponentsStackSize - 1].fullName;
                     } else {
                         // Not inside an unit. So 'scope' parameter has no effect.
                         isInProtectedScope = false;
@@ -603,7 +610,7 @@ function registerHelpers(renderingData, lookupTable) {
                             // already processed. So do not process it again.
                             continue;
                         }
-                        zonesStack.push(contentOfProvider);
+                        defZoneContentsStack.push(contentOfProvider);
                         if (contentOfProvider.hasSubZones() && optionsFn) {
                             tmpBuffer.push(optionsFn(this));
                         }
@@ -613,7 +620,7 @@ function registerHelpers(renderingData, lookupTable) {
                             // Scope of this zone is 'protected', so mark this content as 'expired'
                             // since we have finished processing it.
                         }
-                        zonesStack.pop();
+                        defZoneContentsStack.pop();
                     }
                     mainZoneBuffer.push(tmpBuffer.join(""));
                 }
@@ -626,7 +633,7 @@ function registerHelpers(renderingData, lookupTable) {
         } else {
             // This is a sub-zone.
             // {{#defineZone "A"}} {{#defineZone "B"}} ... {{/defineZone}} {{/defineZone}}
-            var parentZoneContent = zonesStack[zonesStackSize - 1];
+            var parentZoneContent = defZoneContentsStack[defZoneContentsStackSize - 1];
             var zoneContents = parentZoneContent.getSubZoneContents(zoneName);
             if (zoneContents) {
                 var numberOfZoneContents = zoneContents.length;
@@ -634,12 +641,12 @@ function registerHelpers(renderingData, lookupTable) {
                 for (var k = 0; k < numberOfZoneContents; k++) {
                     var zoneContent = zoneContents[k];
                     // Here (parentZoneContent.provider == subZoneContent.provider) is true.
-                    zonesStack.push(zoneContent);
+                    defZoneContentsStack.push(zoneContent);
                     if (zoneContent.hasSubZones() && optionsFn) {
                         subZoneBuffer.push(optionsFn(this));
                     }
                     subZoneBuffer.push(zoneContent.getContent());
-                    zonesStack.pop();
+                    defZoneContentsStack.pop();
                 }
                 zoneHtml = subZoneBuffer.join("");
             } else {
@@ -652,17 +659,48 @@ function registerHelpers(renderingData, lookupTable) {
         return new handlebarsEnvironment.SafeString(zoneHtml);
     }
 
-    handlebarsEnvironment.registerHelper({
-        page: pageHelper,
-        unit: unitHelper,
-        zone: zoneHelper,
-        css: function (path, options) {
-            return resourceHelper("css", path, options)
-        },
-        js: function (path, options) {
-            return resourceHelper("js", path, options)
-        },
-        defineZone: defineZoneHelper
-    });
-    return handlebarsEnvironment;
-}
+    function createHandlebarsEnvironment() {
+        var handlebarsRootEnv = application.get(constants.CACHE_KEY_HANDLEBARS_ROOT);
+        if (!handlebarsRootEnv) {
+            handlebarsRootEnv = require("/lib/modules/handlebars/handlebars-v2.0.0.js").Handlebars;
+            application.put(constants.CACHE_KEY_HANDLEBARS_ROOT, handlebarsRootEnv);
+        }
+        handlebarsEnvironment = handlebarsRootEnv.create();
+    }
+
+    function compileTemplate(template) {
+        // TODO cache compiled templates or pre-compile templates.
+        return handlebarsEnvironment.compile(template);
+    }
+
+    /**
+     * Renders the specified Handlebars template.
+     * @param template {string} Handlebars template
+     * @param templateContext {Object} Handlebars template context
+     * @param renderingContext {RenderingContext} rendering context
+     * @param lookupTable {LookupTable} lookup table
+     * @returns {string} HTML
+     */
+    render = function (template, templateContext, renderingContext, lookupTable) {
+        createHandlebarsEnvironment();
+        handlebarsEnvironment.registerHelper({
+            page: function (pageFullName, options) {
+                return pageHelper(pageFullName, options, renderingContext, lookupTable);
+            },
+            unit: function (unitFullName, options) {
+                return unitHelper(unitFullName, options, renderingContext, lookupTable);
+            },
+            css: function (path, options) {
+                return resourceHelper("css", path, options)
+            },
+            js: function (path, options) {
+                return resourceHelper("js", path, options)
+            },
+            zone: zoneHelper,
+            defineZone: function (zoneName, options) {
+                return defineZoneHelper(zoneName, options, renderingContext);
+            }
+        });
+        return compileTemplate(template)(templateContext);
+    };
+})();

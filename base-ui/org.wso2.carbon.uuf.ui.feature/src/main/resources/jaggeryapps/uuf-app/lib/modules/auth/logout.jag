@@ -1,7 +1,9 @@
 <%
+include("/lib/error-pages.jag");
+
 (function () {
-    var log = new Log("user-module-login");
-    var authModule = require("auth.js");
+    var log = new Log("auth-module-logout");
+    var authModule = require("auth.js").module;
 
     if (!authModule.isEnabled()) {
         log.warn("Auth module is not enabled in the application configuration file.");
@@ -22,25 +24,10 @@
 
     if (authModule.isSsoEnabled()) {
         // SSO is enabled.
-        var ssoRequestData = authModule.getSsoLogoutRequestParams();
-        if (ssoRequestData) {
-            print("<div><p>You are now being redirected to Identity Server. "
-                  + "If the redirection fails, please click on the button below.</p>"
-                  + "<form method='post' action='" + ssoRequestData.identityProviderUrl
-                  + "'><input type='hidden' name='SAMLRequest' value='"
-                  + ssoRequestData.encodedSAMLAuthRequest
-                  + "'/><input type='hidden' name='RelayState' value='" + ssoRequestData.relayState
-                  + "'/><input type='hidden' name='SSOAuthSessionID' value='"
-                  + ssoRequestData.sessionId
-                  + "'/><button type='submit'>Redirect manually</button></form></div>"
-                  + "<script type='text/javascript'>document.forms[0].submit();</script>");
-        } else {
-            // Some error occurred when getting SSO login request parameters.
-            return;
-        }
+        authModule.renderSsoIntermediatePage("logout", response);
     } else {
         // Generic login process is enabled.
-        authModule.logout();
+        authModule.logout(response);
     }
 })();
 %>

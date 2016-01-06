@@ -16,7 +16,6 @@ function onRequest(context) {
                 if (queryString && (queryString.length > 0)) {
                     redirectUri = redirectUri + "?" + queryString;
                 }
-                new Log().info("redirectUri = " + encodeURI(redirectUri));
                 response.sendRedirect(encodeURI(redirectUri));
                 exit();
             } else {

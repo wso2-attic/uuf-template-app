@@ -6,14 +6,14 @@
  *     string, FILE_UUF_CONF: string, MODULE_AUTH: string, MODULE_HANDLEBARS: string, MODULE_LESS:
  *     string, APP_CONF_APP_NAME: string, APP_CONF_CACHE_ENABLED: string,
  *     APP_CONF_DEBUGGING_ENABLED: string, APP_CONF_PERMISSION_ROOT: string,
- *     APP_CONF_ADMIN_SERVICES_URL: string, APP_CONF_LOGIN_URI: string, APP_CONF_AUTH_MODULE:
- *     string, APP_CONF_AUTH_MODULE_ENABLED: string, APP_CONF_AUTH_MODULE_TRANSPORT: string,
- *     APP_CONF_AUTH_MODULE_LOGIN: string, APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS: string,
- *     APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS_SCRIPT: string,
- *     APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS_PAGE: string, APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL:
- *     string, APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL_SCRIPT: string,
- *     APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL_PAGE: string, APP_CONF_AUTH_MODULE_LOGOUT: string,
- *     APP_CONF_AUTH_MODULE_LOGOUT_ON_SUCCESS: string,
+ *     APP_CONF_ADMIN_SERVICES_URL: string, APP_CONF_LOGIN_PAGE: string, APP_CONF_ERROR_PAGES:
+ *     string, APP_CONF_AUTH_MODULE: string, APP_CONF_AUTH_MODULE_ENABLED: string,
+ *     APP_CONF_AUTH_MODULE_TRANSPORT: string, APP_CONF_AUTH_MODULE_LOGIN: string,
+ *     APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS: string, APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS_SCRIPT:
+ *     string, APP_CONF_AUTH_MODULE_LOGIN_ON_SUCCESS_PAGE: string,
+ *     APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL: string, APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL_SCRIPT:
+ *     string, APP_CONF_AUTH_MODULE_LOGIN_ON_FAIL_PAGE: string, APP_CONF_AUTH_MODULE_LOGOUT:
+ *     string, APP_CONF_AUTH_MODULE_LOGOUT_ON_SUCCESS: string,
  *     APP_CONF_AUTH_MODULE_LOGOUT_ON_SUCCESS_SCRIPT: string,
  *     APP_CONF_AUTH_MODULE_LOGOUT_ON_SUCCESS_PAGE: string, APP_CONF_AUTH_MODULE_LOGOUT_ON_FAIL:
  *     string, APP_CONF_AUTH_MODULE_LOGOUT_ON_FAIL_SCRIPT: string,
@@ -24,7 +24,7 @@
  *     APP_CONF_AUTH_MODULE_SSO_KEY_STORE_PASSWORD: string,
  *     APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_ALIAS: string,
  *     APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_URL: string,
- *     APP_CONF_AUTH_MODULE_SSO_ASSERTION_CONSUMER_URL: string, UUF_CONF_DISPLAY_NAME: string,
+ *     APP_CONF_AUTH_MODULE_SSO_INTERMEDIATE_PAGE: string, UUF_CONF_DISPLAY_NAME: string,
  *     UUF_CONF_LOG_LEVEL: string, UUF_CONF_ERROR_PAGES: string, UUF_CONF_SECURITY_CONSTRAINTS:
  *     string, UI_COMPONENT_JS_FUNCTION_ON_REQUEST: string, UI_COMPONENT_DEFINITION_VERSION:
  *     string, UI_COMPONENT_DEFINITION_INDEX: string, UI_COMPONENT_DEFINITION_EXTENDS: string,
@@ -35,7 +35,8 @@
  *     COMBINED_RESOURCES_SEPARATOR: string, COMBINED_RESOURCES_URL_TAIL: string,
  *     CACHE_KEY_UUF_CONF: string, CACHE_KEY_UUF_CONF_FILE_LMD: string, CACHE_KEY_APP_CONF: string,
  *     CACHE_KEY_APP_CONF_FILE_LMD: string, CACHE_KEY_LOOKUP_TABLE: string, CACHE_KEY_USER: string,
- *     CACHE_KEY_SSO_SESSIONS: string, URL_PARAM_REFERER: string}}
+ *     CACHE_KEY_SSO_SESSIONS: string, CACHE_KEY_HANDLEBARS_ROOT: string, URL_PARAM_REFERER:
+ *     string}}
  */
 var constants = {
     // Paths - Directories
@@ -53,15 +54,16 @@ var constants = {
     FILE_UUF_CONF: "/app/conf/uuf-conf.json",
     // Paths - Module
     MODULE_AUTH: "/lib/modules/auth/auth.js",
-    MODULE_HANDLEBARS: "/lib/modules/handlebars/handlebars-v2.0.0.js",
-    MODULE_LESS: "/lib/modules/less/less-rhino-1.7.5.js",
+    MODULE_HANDLEBARS: "/lib/modules/handlebars/handlebars.js",
+    MODULE_LESS: "/lib/modules/less/less.js",
     // Configurations - App
     APP_CONF_APP_NAME: "appName",
     APP_CONF_CACHE_ENABLED: "cachingEnabled",
     APP_CONF_DEBUGGING_ENABLED: "debuggingEnabled",
     APP_CONF_PERMISSION_ROOT: "permissionRoot",
     APP_CONF_ADMIN_SERVICES_URL: "adminServicesUrl",
-    APP_CONF_LOGIN_URI: "loginUri",
+    APP_CONF_LOGIN_PAGE: "loginPage",
+    APP_CONF_ERROR_PAGES: "errorPages",
     // Configurations - App - Auth module
     APP_CONF_AUTH_MODULE: "authModule",
     APP_CONF_AUTH_MODULE_ENABLED: "enabled",
@@ -88,7 +90,7 @@ var constants = {
     APP_CONF_AUTH_MODULE_SSO_KEY_STORE_PASSWORD: "keyStorePassword",
     APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_ALIAS: "identityProviderAlias",
     APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_URL: "identityProviderUrl",
-    APP_CONF_AUTH_MODULE_SSO_ASSERTION_CONSUMER_URL: "assertionConsumerUrl",
+    APP_CONF_AUTH_MODULE_SSO_INTERMEDIATE_PAGE: "intermediatePage",
     // Configurations - UUF
     UUF_CONF_DISPLAY_NAME: "displayName",
     UUF_CONF_LOG_LEVEL: "logLevel",
@@ -102,10 +104,10 @@ var constants = {
     UI_COMPONENT_DEFINITION_EXTENDS: "extends",
     UI_COMPONENT_DEFINITION_PERMISSIONS: "permissions",
     UI_COMPONENT_DEFINITION_DISABLED: "disabled",
+    UI_COMPONENT_DEFINITION_IS_ANONYMOUS: "isAnonymous",
     // Page - Definition
     PAGE_DEFINITION_URI: "uri",
     PAGE_DEFINITION_LAYOUT: "layout",
-    PAGE_DEFINITION_IS_ANONYMOUS: "isAnonymous",
     // Unit - Definition
     UNIT_DEFINITION_PUSHED_URIS: "pushedUris",
     // Handlebars helper parameters
@@ -124,6 +126,7 @@ var constants = {
     CACHE_KEY_LOOKUP_TABLE: "_UUF_LOOKUP_TABLE",
     CACHE_KEY_USER: "_UUF_USER",
     CACHE_KEY_SSO_SESSIONS: "_UUF_SSO_SESSIONS",
+    CACHE_KEY_HANDLEBARS_ROOT: "_UUF_HANDLEBARS_ROOT",
     // URL Query Params
     URL_PARAM_REFERER: "referer"
 };
