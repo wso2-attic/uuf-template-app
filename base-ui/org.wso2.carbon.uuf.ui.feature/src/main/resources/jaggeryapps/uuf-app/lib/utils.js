@@ -1,105 +1,15 @@
 /**
- * Utils module.
- * @typedef {{parseBoolean: function, getConfigurations: function, getAppConfigurations: function,
- *     getLookupTable: function, getFurthestChild: function, getFileInUiComponent: function,
- *     getCurrentUser: function, setCurrentUser: function, getAppContext: function}} UtilsModule
- */
-
-/**
- * Represent data of a shareable UI component.
- * @typedef {{fullName: string, shortName: string, path: string, index: number, templateFilePath:
- *     string, scriptFilePath: string definition: Object, parents: string[],
- *     children: string[]}} UIComponent
- */
-
-/**
- * Represent data of a layout.
- * @typedef {{path: string}} Layout
- */
-
-/**
- * The lookup table.
- * @typedef {{layouts: Object.<string, Layout>, pages: Object.<string, UIComponent>, uriPagesMap:
- *     Object.<string, string>, units: Object.<string, UIComponent>, pushedUnits: Object.<string,
- *     string[]>, uiComponents: Object.<string, UIComponent>}} LookupTable
- */
-
-/**
  * User data.
  * @typedef {{username: string, domain: string, tenantId: string, permissions: Object.<string,
  *     string>}} User
  */
 
-/**
- * Returns the boolean value of the specified object.
- * @param obj {Object} object to be converted to boolean
- * @param {boolean} [defaultValue=false] if <code>obj</code> is <code>null</code> or
- *     <code>undefined</code> then this values is returned
- * @return {boolean} boolean value of the parsed object
- */
-var parseBoolean;
+var utils = {};
 
-/**
- * Returns framework configurations.
- * @return {Object} lib configurations
- */
-var getConfigurations;
-
-/**
- * Returns application configurations.
- * @return {Object} application configurations
- */
-var getAppConfigurations;
-
-/**
- * Returns the lookup table.
- * @param configs {Object} application configurations
- * @return {LookupTable} lookup table
- */
-var getLookupTable;
-
-/**
- * Returns the furthest child UI component of the specified UI component.
- * @param uiComponent {UIComponent} UI component
- * @param lookupTable {LookupTable} lookup table
- * @return {UIComponent} furthest child
- */
-var getFurthestChild;
-
-/**
- * Returns the file.
- * @param uiComponent {UIComponent} UI component
- * @param uiComponentType {string} type of the UI component, either "unit" or "page"
- * @param relativeFilePath {string} file path
- * @param lookupTable {LookupTable} lookup table
- * @returns {Object} file
- */
-var getFileInUiComponent;
-
-/**
- * Returns the current logged-in user.
- * @returns {?User}
- */
-var getCurrentUser;
-
-/**
- * Sets the current user.
- * @param username {string} username
- * @param domain {string} domain
- * @param tenantId {string} tenant ID
- */
-var setCurrentUser;
-
-/**
- * Returns web app context path.
- * @param request {Object} HTTP request
- * @returns {string} context path
- */
-var getAppContext;
-
-(function () {
+(function (utils) {
     var log = new Log("utils");
     var constants = require("constants.js").constants;
+    var models = require("models.js");
 
     /**
      * Extends the specified child object from the specified parent object.
@@ -154,7 +64,7 @@ var getAppContext;
                 success: false,
                 message: "Page '" + page.fullName + "' or its parents " + stringify(page.parents)
                          + " do not have a layout."
-            }
+            };
         } else if (!layoutsData[layoutFullName]) {
             return {
                 success: false,
@@ -231,7 +141,7 @@ var getAppContext;
     /**
      * Returns layout data.
      * @param layoutsDir {string} path to the layouts directory
-     * @return {Object.<string, {path: string}>} layouts data
+     * @return {Object.<string, Layout>} layouts data
      */
     function getLayoutsData(layoutsDir) {
         var layoutsData = {};
@@ -250,9 +160,8 @@ var getAppContext;
             }
 
             var layoutFullName = layoutFileName.substr(0, index);
-            layoutsData[layoutFullName] = {
-                path: layoutsDir + "/" + layoutFileName
-            }
+            layoutsData[layoutFullName] = new models.Layout(layoutFullName,
+                                                            layoutsDir + "/" + layoutFileName);
         }
         return layoutsData;
     }
@@ -282,46 +191,38 @@ var getAppContext;
             var componentFullName = componentDirectory.getName();
             var componentShortName = componentFullName.substr(componentFullName.lastIndexOf(".")
                                                               + 1);
-            if (!componentShortName) {
+            if (!componentShortName || (componentShortName.length == 0)) {
                 // Invalid name for an UI component
                 throw new Error("Name '" + componentFullName + "' of " + componentType
                                 + " is invalid. Name of a " + componentType
                                 + " should be in {namespace}.{short_name} format.");
             }
             var componentPath = componentsPath + "/" + componentFullName;
+            /** @type {UIComponent} */
+            var uiComponent = new models.UIComponent();
+            uiComponent.fullName = componentFullName;
+            uiComponent.shortName = componentShortName;
+            uiComponent.path = componentPath;
+            uiComponent.type = componentType;
             // UI component's template is read form the <component_short_name>.hbs file.
             var templateFile = new File(componentPath + "/" + componentShortName + ".hbs");
-            var componentTemplateFilePath = null;
             if (templateFile.isExists() && !templateFile.isDirectory()) {
-                componentTemplateFilePath = templateFile.getPath();
+                uiComponent.templateFilePath = templateFile.getPath();
             }
             // UI component's script is read form the <component_short_name>.js file.
             var scriptFile = new File(componentPath + "/" + componentShortName + ".js");
-            var componentScriptFilePath = null;
             if (scriptFile.isExists() && !scriptFile.isDirectory()) {
-                componentScriptFilePath = scriptFile.getPath();
+                uiComponent.scriptFilePath = scriptFile.getPath();
             }
             // UI component's definition is read form the <component_short_name>.json file.
-            var componentDefinition = null;
             var definitionFile = new File(componentPath + "/" + componentShortName + ".json");
             if (!definitionFile.isExists() || definitionFile.isDirectory()) {
                 throw new Error("Definition file of " + componentType + " '" + componentFullName
                                 + "' does not exists.");
             } else {
-                componentDefinition = require(definitionFile.getPath());
+                uiComponent.definition = require(definitionFile.getPath());
             }
 
-            var uiComponent = {
-                fullName: componentFullName,
-                shortName: componentShortName,
-                path: componentPath,
-                index: 1000000,
-                templateFilePath: componentTemplateFilePath,
-                scriptFilePath: componentScriptFilePath,
-                definition: componentDefinition,
-                parents: [],
-                children: []
-            };
             uiComponentsMap[componentFullName] = uiComponent;
             uiComponentsList.push(uiComponent);
         }
@@ -331,12 +232,11 @@ var getAppContext;
         var extendsKey = constants.UI_COMPONENT_DEFINITION_EXTENDS;
         for (i = 0; i < numberOfComponents; i++) {
             var component = uiComponentsList[i];
-            component[constants.UI_COMPONENT_DEFINITION_INDEX] = i;
             var componentFullName = component.fullName;
             var componentParents = component.parents;
             var componentDefinition = component.definition;
 
-            var parentComponentFullName = component.definition[extendsKey];
+            var parentComponentFullName = componentDefinition[extendsKey];
             while (parentComponentFullName) {
                 var parentComponent = uiComponentsMap[parentComponentFullName];
                 if (!parentComponent) {
@@ -347,8 +247,8 @@ var getAppContext;
                                     + "' does not exists.");
                 }
 
-                parentComponent.children.push(componentFullName);
-                componentParents.push(parentComponentFullName);
+                parentComponent.children.push(component);
+                componentParents.push(parentComponent);
                 componentDefinition = extend(componentDefinition, parentComponent.definition);
                 parentComponentFullName = parentComponent.definition[extendsKey];
             }
@@ -360,7 +260,14 @@ var getAppContext;
         return {map: uiComponentsMap, array: uiComponentsList};
     }
 
-    parseBoolean = function (obj, defaultValue) {
+    /**
+     * Returns the boolean value of the specified object.
+     * @param obj {Object} object to be converted to boolean
+     * @param {boolean} [defaultValue=false] if <code>obj</code> is <code>null</code> or
+     *     <code>undefined</code> then this values is returned
+     * @return {boolean} boolean value of the parsed object
+     */
+    utils.parseBoolean = function (obj, defaultValue) {
         switch (typeof obj) {
             case 'boolean':
                 return obj;
@@ -374,7 +281,11 @@ var getAppContext;
         }
     };
 
-    getConfigurations = function () {
+    /**
+     * Returns UUF configurations.
+     * @return {Object} UUF configurations
+     */
+    utils.getConfigurations = function () {
         var confFile = new File(constants.FILE_UUF_CONF);
         if (!confFile.isExists() || confFile.isDirectory()) {
             throw new Error("Unified UI framework configurations file '" + constants.FILE_UUF_CONF
@@ -404,7 +315,11 @@ var getAppContext;
         }
     };
 
-    getAppConfigurations = function () {
+    /**
+     * Returns application configurations.
+     * @return {Object} application configurations
+     */
+    utils.getAppConfigurations = function () {
         var appConfFile = new File(constants.FILE_APP_CONF);
         if (!appConfFile.isExists() || appConfFile.isDirectory()) {
             throw new Error("Application configurations file '" + constants.FILE_APP_CONF
@@ -430,7 +345,6 @@ var getAppContext;
             content = content.replace(/\$\{server\.ip}/g, getProperty("carbon.local.ip"));
             content = content.replace(/\$\{server\.http_port}/g, getProperty("carbon.http.port"));
             content = content.replace(/\$\{server\.https_port}/g, getProperty("carbon.https.port"));
-            content = content.replace(/\$\{app\.context}/g, getAppContext(request));
 
             var appConf = parse(content);
             application.put(constants.CACHE_KEY_APP_CONF, appConf);
@@ -442,8 +356,13 @@ var getAppContext;
         }
     };
 
-    getLookupTable = function (configs) {
-        var isCachingEnabled = parseBoolean(configs[constants.APP_CONF_CACHE_ENABLED]);
+    /**
+     * Returns the lookup table.
+     * @param configs {Object} application configurations
+     * @return {LookupTable} lookup table
+     */
+    utils.getLookupTable = function (configs) {
+        var isCachingEnabled = utils.parseBoolean(configs[constants.APP_CONF_CACHE_ENABLED]);
         if (isCachingEnabled) {
             var cachedLookupTable = application.get(constants.CACHE_KEY_LOOKUP_TABLE);
             if (cachedLookupTable) {
@@ -454,6 +373,7 @@ var getAppContext;
         // layouts
         var layoutsData = getLayoutsData(constants.DIRECTORY_APP_LAYOUTS);
 
+        /** @type {Object.<string, UIComponent>} */
         var allUiComponents = {};
 
         // units
@@ -465,6 +385,13 @@ var getAppContext;
         for (var i = 0; i < numberOfUnits; i++) {
             var unit = unitsArray[i];
             unit.index = i;
+            var unitDefinition = unit.definition;
+            unit.disabled =
+                utils.parseBoolean(unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]);
+            if (unit.disabled) {
+                // This unit is disabled.
+                continue;
+            }
             allUiComponents[unit.fullName] = unit;
 
             if (unit.children.length != 0) {
@@ -476,18 +403,13 @@ var getAppContext;
                 // Invalid unit definition.
                 throw new Error(validationData.message);
             }
-            var unitDefinition = unit.definition;
-            if (unitDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]) {
-                // This unit is disabled.
-                continue;
-            }
 
             var uriPatterns = unitDefinition[constants.UNIT_DEFINITION_PUSHED_URIS];
             if (uriPatterns) {
                 var numberOfUriPatterns = uriPatterns.length;
                 var unitFullName = unit.fullName;
-                for (var j = 0; j < numberOfUriPatterns; j++) {
-                    var uriPattern = uriPatterns[j];
+                for (var n = 0; n < numberOfUriPatterns; n++) {
+                    var uriPattern = uriPatterns[n];
                     if (!pushedUnits[uriPattern]) {
                         pushedUnits[uriPattern] = [];
                     }
@@ -500,12 +422,18 @@ var getAppContext;
         var pagesData = getUiComponentsData("page", constants.DIRECTORY_APP_PAGES);
         var pagesArray = pagesData.array;
         var numberOfPages = pagesArray.length;
-        var startingIndex = unitsArray.length;
         /** @type {Object.<string, string>} */
         var uriPagesMap = {};
-        for (var k = 0; k < numberOfPages; k++) {
-            var page = pagesArray[k];
-            page.index = k + startingIndex;
+        for (var j = 0; j < numberOfPages; j++) {
+            var page = pagesArray[j];
+            page.index = i + j;
+            var pageDefinition = page.definition;
+            page.disabled =
+                utils.parseBoolean(pageDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]);
+            if (page.disabled) {
+                // This page is disabled.
+                continue;
+            }
             allUiComponents[page.fullName] = page;
 
             if (page.children.length != 0) {
@@ -517,15 +445,10 @@ var getAppContext;
                 // Invalid page definition.
                 throw new Error(validationData.message);
             }
-            var pageDefinition = page.definition;
-            if (pageDefinition[constants.UI_COMPONENT_DEFINITION_DISABLED]) {
-                // This page is disabled.
-                continue;
-            }
 
             var pageUri = pageDefinition[constants.PAGE_DEFINITION_URI];
             if (uriPagesMap[pageUri]) {
-                // A page is already registered for this URI.
+                // Some other page is already registered for this URI.
                 throw new Error("Cannot register page '" + page.fullName + "' for URI '" + pageUri
                                 + "' since page '" + uriPagesMap[pageUri]
                                 + "' already registered.");
@@ -545,47 +468,63 @@ var getAppContext;
         return lookupTable;
     };
 
-    getFurthestChild = function (uiComponent, lookupTable) {
-        if (uiComponent.children.length == 0) {
+    /**
+     * Returns the furthest child UI component of the specified UI component.
+     * @param parentUiComponent {UIComponent} UI component
+     * @return {UIComponent} furthest child
+     */
+    utils.getFurthestChild = function (parentUiComponent) {
+        if (parentUiComponent.children.length == 0) {
             // This UI component has no children.
-            return uiComponent;
+            return parentUiComponent;
         }
 
         /** @type {UIComponent} */
         var furthestChild = null;
         var furthestChildDistance = -1;
-        var parentUnitFullName = uiComponent.fullName;
-        var uiComponents = lookupTable.uiComponents;
-        var childrenUnitsFullNames = uiComponent.children;
-        var numberOfChildrenUnits = childrenUnitsFullNames.length;
-        for (var i = 0; i < numberOfChildrenUnits; i++) {
-            var currentChild = uiComponents[childrenUnitsFullNames[i]];
+        var childrenUiComponents = parentUiComponent.children;
+        var numberOfChildrenUiComponents = childrenUiComponents.length;
+        for (var i = 0; i < numberOfChildrenUiComponents; i++) {
+            var currentChild = childrenUiComponents[i];
             // 'currentChild.parents' array contains parent UI components of the 'currentChild' UI
             // component, where first element has the nearest parent and last element has the
             // farthest parent.
-            var currentChildDistance = currentChild.parents.indexOf(parentUnitFullName);
+            var currentChildDistance = -1;
+            var currentChildParents = currentChild.parents;
+            var numberOfCurrentChildParents = currentChildParents.length;
+            for (var j = 0; j < numberOfCurrentChildParents; j++) {
+                if (parentUiComponent.equals(currentChildParents[j])) {
+                    currentChildDistance = j;
+                    break;
+                }
+            }
             if (furthestChildDistance < currentChildDistance) {
                 // Update 'furthestChild' because 'currentChild' is far away than 'furthestChild'.
                 furthestChildDistance = currentChildDistance;
                 furthestChild = currentChild;
             } else if (furthestChildDistance == currentChildDistance) {
                 // UI component 'furthestChild' and unit 'currentChild' are in the same distance
-                // from the 'uiComponent'. Hence, compare indexes of those two UI components.
-                if (currentChild.index < furthestChild.index) {
-                    // Update 'furthestChild' because index of the 'currentChild' is lower (which
-                    // means priority is higher) than 'furthestChild'.
-                    furthestChildDistance = currentChildDistance;
-                    furthestChild = currentChild;
-                } else if (currentChild.index == furthestChild.index) {
-                    // With the current indexing mechanism, same index value for two different
-                    // UI components cannot happen. However we log it here as a precaution.
-                    log.warn("Child UI component '" + furthestChild.fullName + "' and '"
-                             + currentChild.fullName + "' are in the same distance ("
-                             + currentChildDistance + ") from their parent UI component '"
-                             + uiComponent.fullName
-                             + "' was ignored when calculating the furthest child.");
-                } else {
-                    // (currentChild.index > furthestChild.index) No need update 'furthestChild'.
+                // from the 'uiComponent'. Hence, compare those two UI components.
+                switch (currentChild.compareTo(furthestChild)) {
+                    case 1:
+                        // (currentChild > furthestChild)
+                        // Update 'furthestChild' because index of the 'currentChild' has a higher
+                        // priority than 'furthestChild'.
+                        furthestChildDistance = currentChildDistance;
+                        furthestChild = currentChild;
+                        break;
+                    case 0:
+                        // (currentChild == furthestChild)
+                        // With the current indexing mechanism, same index value for two different
+                        // UI components cannot happen. However we log it here as a precaution.
+                        log.warn("Child UI component '" + furthestChild.fullName + "' and '"
+                                 + currentChild.fullName + "' are in the same distance ("
+                                 + currentChildDistance + ") from their parent UI component '"
+                                 + parentUiComponent.fullName
+                                 + "' was ignored when calculating the furthest child.");
+                        break;
+                    case -1:
+                    // (currentChild < furthestChild) No need update 'furthestChild'.
                 }
             } else {
                 // (furthestChildDistance > currentChildDistance) No need to update 'furthestChild'.
@@ -594,11 +533,17 @@ var getAppContext;
         return furthestChild;
     };
 
-    getFileInUiComponent = function (uiComponent, relativeFilePath, lookupTable) {
+    /**
+     * Returns the file.
+     * @param uiComponent {UIComponent} UI component
+     * @param relativeFilePath {string} file path
+     * @returns {Object} file
+     */
+    utils.getFileInUiComponent = function (uiComponent, relativeFilePath) {
         if (relativeFilePath.charAt(0) != "/") {
             relativeFilePath = "/" + relativeFilePath;
         }
-        var childUiComponent = getFurthestChild(uiComponent, lookupTable);
+        var childUiComponent = utils.getFurthestChild(uiComponent);
 
         var file = new File(childUiComponent.path + relativeFilePath);
         if (file.isExists() && !file.isDirectory()) {
@@ -606,11 +551,10 @@ var getAppContext;
             return file;
         }
 
-        var uiComponents = lookupTable.uiComponents;
-        var parentUiComponentsFullNames = childUiComponent.parents;
-        var numberOfParentUiComponents = parentUiComponentsFullNames.length;
+        var parentUiComponents = childUiComponent.parents;
+        var numberOfParentUiComponents = parentUiComponents.length;
         for (var i = 0; i < numberOfParentUiComponents; i++) {
-            var parentUiComponent = uiComponents[parentUiComponentsFullNames[i]];
+            var parentUiComponent = parentUiComponents[i];
             var parentFile = new File(parentUiComponent.path + relativeFilePath);
             if (parentFile.isExists() && !parentFile.isDirectory()) {
                 // Parent UI Component has the file.
@@ -621,7 +565,11 @@ var getAppContext;
         return null;
     };
 
-    getCurrentUser = function () {
+    /**
+     * Returns the current logged-in user.
+     * @returns {?User}
+     */
+    utils.getCurrentUser = function () {
         /** @type {User} */
         var user = session.get(constants.CACHE_KEY_USER);
         if (user && user.username) {
@@ -631,10 +579,16 @@ var getAppContext;
         return null;
     };
 
-    setCurrentUser = function (username, domain, tenantId) {
+    /**
+     * Sets the current user.
+     * @param username {string} username
+     * @param domain {string} domain
+     * @param tenantId {string} tenant ID
+     */
+    utils.setCurrentUser = function (username, domain, tenantId) {
         var carbon = require('carbon');
         var userManager = new carbon.user.UserManager(new carbon.server.Server(), tenantId);
-        var permissionRootPath = getAppConfigurations()[constants.APP_CONF_PERMISSION_ROOT];
+        var permissionRootPath = utils.getAppConfigurations()[constants.APP_CONF_PERMISSION_ROOT];
         if (!permissionRootPath) {
             permissionRootPath = "/";
         }
@@ -654,8 +608,13 @@ var getAppContext;
         session.put(constants.CACHE_KEY_USER, user);
     };
 
-    getAppContext = function (request) {
+    /**
+     * Returns web app context path.
+     * @param request {Object} HTTP request
+     * @returns {string} context path
+     */
+    utils.getAppContext = function (request) {
         var requestContextPath = request.getContextPath();
         return (requestContextPath == "/") ? "" : requestContextPath;
     };
-})();
+})(utils);
