@@ -1,0 +1,6 @@
+<%
+include("error-pages.jag");
+
+var DynamicRouter = require("pages-router.js");
+DynamicRouter.route(request, response);
+%>
