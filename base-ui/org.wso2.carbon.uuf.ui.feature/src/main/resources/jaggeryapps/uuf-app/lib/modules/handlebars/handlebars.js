@@ -386,7 +386,7 @@ var render;
         var unitParams = (optionsHashParams) ? optionsHashParams : optionsHash;
         var unitPublicUri = appContext + "/" + constants.DIRECTORY_APP_UNIT_PUBLIC + "/"
                             + processingUnit.fullName;
-        var uriParams = renderingContext.uriParamss;
+        var uriParams = renderingContext.uriParams;
         var user = renderingContext.user;
         var scriptContext = {
             app: {name: appName, context: appContext, conf: appConf},
