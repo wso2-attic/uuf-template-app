@@ -1,0 +1,13 @@
+{{#zone "title"}}Error | WSO2{{/zone}}
+
+{{#zone "breadcrumbs"}}
+    <li>
+        <a href="{{@app.context}}/">
+            <i class="icon fw fw-home"></i>
+        </a>
+    </li>
+{{/zone}}
+
+{{#zone "content"}}
+    {{unit "uuf.unit.message" type="danger" title=@page.params.status message=@page.params.message}}
+{{/zone}}
