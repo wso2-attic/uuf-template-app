@@ -1,9 +1,9 @@
 {
     "appName": "UUF Template App",
-    "cachingEnabled": true,
+    "cachingEnabled": false,
     "debuggingEnabled": false,
     "permissionRoot": "/",
-    "loginUri": "${app.context}/signin",
+    "loginPage": "uuf.page.sign-in",
     "adminServicesUrl": "https://${server.ip}:${server.https_port}/admin/services/",
     "authModule": {
         "enabled": true,
@@ -37,5 +37,9 @@
             "identityProviderUrl": "https://${server.ip}:${server.https_port}/samlsso",
             "intermediatePage": "uuf.page.sso-intermediate"
         }
+    },
+    "errorPages": {
+        "404": "uuf.page.error",
+        "default": "uuf.page.error"
     }
 }
