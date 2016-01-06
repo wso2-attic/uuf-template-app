@@ -1,80 +1,46 @@
-/**
- * Returns whether the authentication module is enabled or disabled in the configurations.
- * @return {boolean} if authentication module is enabled <code>true</code>, otherwise
- *     <code>false</code>
- */
-var isEnabled;
+var module = {};
 
-/**
- * Returns whether the Single Sign-on feature is enabled or disabled in the authentication module.
- * @return {boolean} if SSO is enabled <code>true</code>, otherwise <code>false</code>
- */
-var isSsoEnabled;
-
-/**
- * Returns necessary HTTP POST parameters for a SSO login(authentication) request.
- * @return {{identityProviderUrl: string, encodedSAMLAuthRequest, string, relayState: string,
- *     sessionId: string}} parameters
- */
-var getSsoLoginRequestParams;
-
-/**
- * Returns necessary HTTP POST parameters for a SSO logout request.
- * @return {{identityProviderUrl: string, encodedSAMLAuthRequest, string, relayState: string,
- *     sessionId: string}} parameters
- */
-var getSsoLogoutRequestParams;
-
-/**
- * SSO Assertion Consumer Service.
- */
-var ssoAcs;
-
-/**
- * Login the specified user.
- */
-var login;
-
-/**
- * Logs-out the current user.
- */
-var logout;
-
-/**
- * Returns the current logged-in user.
- * @returns {{username: string, domain: string, tenantId: string}}
- */
-var getCurrentUser;
-
-/**
- * Returns the web app context path.
- * @returns {string} app context path
- */
-var getAppContext;
-
-(function () {
+(function (module) {
     var log = new Log("auth-module");
+    var constants = require("/lib/constants.js").constants;
+    var utils = require("/lib/utils.js").utils;
+
     var OPERATION_LOGIN = "login";
     var OPERATION_LOGOUT = "logout";
     var EVENT_SUCCESS = "success";
     var EVENT_FAIL = "fail";
-    var constants = require("/lib/constants.js").constants;
-    /** @type {UtilsModule} */
-    var Utils = require("/lib/utils.js");
+    var cachedAppConfigs, cachedAuthModuleConfigs, cachedSsoConfigs, cachedLookupTable;
+
+    /**
+     * Returns application configurations.
+     * @returns {Object} application configurations
+     */
+    function getAppConfigurations() {
+        if (cachedAppConfigs) {
+            return cachedAppConfigs;
+        }
+
+        return cachedAppConfigs = utils.getAppConfigurations();
+    }
 
     /**
      * Returns the configurations of the 'uuf.auth' module.
      * @return {Object} configurations of the 'uuf.auth' modules
      */
     function getAuthModuleConfigurations() {
-        var userModuleConfigs = Utils.getAppConfigurations()[constants.APP_CONF_AUTH_MODULE];
-        if (userModuleConfigs) {
-            return userModuleConfigs;
+        if (cachedAuthModuleConfigs) {
+            return cachedAuthModuleConfigs;
+        }
+
+        var authModuleConfigs = getAppConfigurations()[constants.APP_CONF_AUTH_MODULE];
+        if (authModuleConfigs) {
+            cachedAuthModuleConfigs = authModuleConfigs;
         } else {
             log.error("Cannot find User module configurations in application configuration file '"
                       + constants.FILE_APP_CONF + "'.");
-            return {};
+            cachedAuthModuleConfigs = {};
         }
+        return cachedAuthModuleConfigs;
     }
 
     /**
@@ -138,15 +104,32 @@ var getAppContext;
      * @return {Object.<string, string>} SSO configurations
      */
     function getSsoConfigurations() {
+        if (cachedSsoConfigs) {
+            return cachedSsoConfigs;
+        }
+
         var authModuleConfigs = getAuthModuleConfigurations();
         var ssoConfigs = authModuleConfigs[constants.APP_CONF_AUTH_MODULE_SSO];
         if (ssoConfigs) {
-            return ssoConfigs;
+            cachedSsoConfigs = ssoConfigs;
         } else {
             log.error("Cannot find SSO configurations in Auth module configurations in application "
                       + "configuration file '" + constants.FILE_APP_CONF + "'.");
-            return {};
+            cachedSsoConfigs = {};
         }
+        return cachedSsoConfigs;
+    }
+
+    /**
+     * Returns the lookup table.
+     * @returns {LookupTable}
+     */
+    function getLookupTable() {
+        if (cachedLookupTable) {
+            return cachedLookupTable;
+        }
+
+        return cachedLookupTable = utils.getLookupTable(getAppConfigurations());
     }
 
     function getRedirectUri(operation, event) {
@@ -163,21 +146,24 @@ var getAppContext;
                            configs[constants.APP_CONF_AUTH_MODULE_LOGOUT_ON_FAIL_PAGE];
         }
 
-        var redirectUri;
-        if (pageFullName && (pageFullName.length != 0)) {
-            var page = Utils.getLookupTable(Utils.getAppConfigurations()).pages[pageFullName];
+        if (pageFullName) {
+            var page = getLookupTable().pages[pageFullName];
             if (page) {
-                redirectUri = getAppContext() + page.definition[constants.PAGE_DEFINITION_URI];
+                page = utils.getFurthestChild(page);
+                if (!page.disabled) {
+                    return module.getAppContext() + page.definition[constants.PAGE_DEFINITION_URI];
+                }
+                log.warn("Page '" + pageFullName + "' mentioned in Auth module configurations in "
+                         + "application configuration file '" + constants.FILE_APP_CONF
+                         + "' is disabled.");
+
             } else {
                 log.error("Page '" + pageFullName + "' mentioned in Auth module configurations in "
                           + "application configuration file '" + constants.FILE_APP_CONF
                           + "' does not exists.");
-                redirectUri = getAppContext() + "/";
             }
-        } else {
-            redirectUri = getAppContext() + "/";
         }
-        return redirectUri;
+        return (module.getAppContext() + "/");
     }
 
     /**
@@ -265,44 +251,7 @@ var getAppContext;
         response.sendRedirect(encodeURI(redirectUri));
     }
 
-    /**
-     * Returns SSO sessions map.
-     * @return {Object.<string, {sessionId: string, loggedInUser: string, sessionIndex: string,
-     *     samlToken: string}>} SSO sessions
-     */
-    function getSsoSessions() {
-        var ssoSessions = session.get(constants.CACHE_KEY_SSO_SESSIONS);
-        if (!ssoSessions) {
-            ssoSessions = {};
-            session.put(constants.CACHE_KEY_SSO_SESSIONS, ssoSessions);
-        }
-        return ssoSessions;
-    }
-
-    function setCurrentUser(username, domain, tenantId) {
-        Utils.setCurrentUser(username, domain, tenantId);
-    }
-
-    getCurrentUser = function () {
-        return Utils.getCurrentUser();
-    };
-
-    getAppContext = function () {
-        return Utils.getAppContext(request);
-    };
-
-    isEnabled = function () {
-        var userModuleConfigs = getAuthModuleConfigurations();
-        return Utils.parseBoolean(userModuleConfigs[constants.APP_CONF_AUTH_MODULE_ENABLED],
-                                  false);
-    };
-
-    isSsoEnabled = function () {
-        var ssoConfigs = getSsoConfigurations();
-        return Utils.parseBoolean(ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_ENABLED], false);
-    };
-
-    getSsoLoginRequestParams = function () {
+    function getSsoLoginRequestParams() {
         var ssoConfigs = getSsoConfigurations();
         // Identity Provider URL
         var identityProviderUrl = ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_URL];
@@ -340,9 +289,9 @@ var getAppContext;
             relayState: getRelayState(OPERATION_LOGIN),
             sessionId: session.getId()
         }
-    };
+    }
 
-    getSsoLogoutRequestParams = function () {
+    function getSsoLogoutRequestParams() {
         var ssoConfigs = getSsoConfigurations();
         // Identity Provider URL
         var identityProviderUrl = ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_IDENTITY_PROVIDER_URL];
@@ -388,9 +337,135 @@ var getAppContext;
             relayState: getRelayState(OPERATION_LOGOUT),
             sessionId: sessionId
         }
+    }
+
+    /**
+     * Returns SSO sessions map.
+     * @return {Object.<string, {sessionId: string, loggedInUser: string, sessionIndex: string,
+     *     samlToken: string}>} SSO sessions
+     */
+    function getSsoSessions() {
+        var ssoSessions = session.get(constants.CACHE_KEY_SSO_SESSIONS);
+        if (!ssoSessions) {
+            ssoSessions = {};
+            session.put(constants.CACHE_KEY_SSO_SESSIONS, ssoSessions);
+        }
+        return ssoSessions;
+    }
+
+    /**
+     * Returns whether the authentication module is enabled or disabled in the configurations.
+     * @return {boolean} if authentication module is enabled <code>true</code>, otherwise
+     *     <code>false</code>
+     */
+    module.isEnabled = function () {
+        var authModuleConfigs = getAuthModuleConfigurations();
+        return utils.parseBoolean(authModuleConfigs[constants.APP_CONF_AUTH_MODULE_ENABLED]);
     };
 
-    ssoAcs = function () {
+    /**
+     * Returns whether the Single Sign-on feature is enabled or disabled in the authentication
+     * module.
+     * @return {boolean} if SSO is enabled <code>true</code>, otherwise <code>false</code>
+     */
+    module.isSsoEnabled = function () {
+        var ssoConfigs = getSsoConfigurations();
+        return utils.parseBoolean(ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_ENABLED]);
+    };
+
+    /**
+     * Returns the current logged-in user.
+     * @returns {?User}
+     */
+    module.getCurrentUser = function () {
+        return utils.getCurrentUser();
+    };
+
+    /**
+     * Retuns the application context path.
+     * @returns {string}
+     */
+    module.getAppContext = function () {
+        return utils.getAppContext(request);
+    };
+
+    /**
+     * Renders the SSO intermediate page which redirects to the identity server.
+     * @param operation {string} either "login" or "logout"
+     * @param response {Object} HTTP response
+     */
+    module.renderSsoIntermediatePage = function (operation, response) {
+        var requestParams, uri;
+        if (operation == OPERATION_LOGIN) {
+            requestParams = getSsoLoginRequestParams();
+            uri = "/uuf/login";
+        } else {
+            requestParams = getSsoLogoutRequestParams();
+            uri = "/uuf/logout";
+        }
+        if (!requestParams) {
+            return;
+        }
+
+        var ssoConfigs = getSsoConfigurations();
+        var lookupTable = getLookupTable();
+        var renderingContext = {
+            app: {
+                context: module.getAppContext(),
+                conf: getAppConfigurations()
+            },
+            uri: uri,
+            uriParams: {},
+            user: module.getCurrentUser()
+        };
+        var renderer = require("/lib/dynamic-files-renderer.js").renderer;
+
+        var intermediatePageName = ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_INTERMEDIATE_PAGE];
+        if (intermediatePageName) {
+            var intermediatePage = lookupTable.pages[intermediatePageName];
+            if (intermediatePage) {
+                intermediatePage = utils.getFurthestChild(intermediatePage);
+                if (!intermediatePage.disabled) {
+                    renderer.renderUiComponent(intermediatePage, requestParams, renderingContext,
+                                               lookupTable, response);
+                    return;
+                }
+                log.warn("Intermediate page '" + intermediatePageName + " mentioned in Auth module "
+                         + "configurations in application configuration file '"
+                         + constants.FILE_APP_CONF + "' is disabled.");
+            } else {
+                log.error("Intermediate page '" + intermediatePageName
+                          + " mentioned in Auth module "
+                          + "configurations in application configuration file '"
+                          + constants.FILE_APP_CONF + "' does not exists.");
+            }
+        }
+
+        var template;
+        var templateFile = new File("/lib/modules/auth/default-sso-intermediate-page.hbs");
+        try {
+            templateFile.open("r");
+            template = templateFile.readAll();
+        } catch (e) {
+            log.error(e.message, e);
+            response.sendError(500, e.message);
+            return;
+        } finally {
+            try {
+                templateFile.close();
+            } catch (ee) {
+                log.error(ee.message, ee);
+            }
+        }
+        renderer.renderTemplate(template, requestParams, renderingContext, lookupTable, response);
+    };
+
+    /**
+     * SSO Assertion Consumer Service.
+     * @param request {Object} HTTP request
+     * @param response {Object} HTTP response
+     */
+    module.ssoAcs = function (request, response) {
         var samlResponse = request.getParameter("SAMLResponse");
         if (!samlResponse) {
             var msg = "SAML response is not found in request parameters.";
@@ -410,12 +485,12 @@ var getAppContext;
 
         if (ssoClient.isLogoutResponse(samlResponseObj)) {
             // This is a logout response.
-            logout();
+            module.logout(response);
         } else {
             // This is a login response.
             var ssoConfigs = getSsoConfigurations();
             var rsEnabled = ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_RESPONSE_SIGNING_ENABLED];
-            if (Utils.parseBoolean(rsEnabled, false)) {
+            if (utils.parseBoolean(rsEnabled)) {
                 // Response signing is enabled.
                 var keyStoreParams = {
                     KEY_STORE_NAME: ssoConfigs[constants.APP_CONF_AUTH_MODULE_SSO_KEY_STORE_NAME],
@@ -439,8 +514,8 @@ var getAppContext;
                 var ssoSessions = getSsoSessions();
                 ssoSessions[ssoSession.sessionId] = ssoSession;
                 var carbonUser = (require("carbon")).server.tenantUser(ssoSession.loggedInUser);
-                setCurrentUser(carbonUser.username, carbonUser.domain, carbonUser.tenantId);
-                var scriptArgument = {input: {}, user: getCurrentUser()};
+                utils.setCurrentUser(carbonUser.username, carbonUser.domain, carbonUser.tenantId);
+                var scriptArgument = {input: {}, user: module.getCurrentUser()};
                 handleEvent(OPERATION_LOGIN, EVENT_SUCCESS, scriptArgument);
             } else {
                 var msg = "Cannot decode SAML login response.";
@@ -450,17 +525,20 @@ var getAppContext;
         }
     };
 
-    login = function () {
+    /**
+     * Basic login.
+     * @param request {Object} HTTP request
+     * @param response {Object} HTTP response
+     */
+    module.login = function (request, response) {
         var username = request.getParameter("username");
         if (!username || (username.length == 0)) {
-            var error = new Error("Please enter username.");
-            handleEvent(OPERATION_LOGIN, EVENT_FAIL, error);
+            handleEvent(OPERATION_LOGIN, EVENT_FAIL, new Error("Please enter username."));
             return;
         }
         var password = request.getParameter("password");
         if (!password || (password.length == 0)) {
-            var error = new Error("Please enter password.");
-            handleEvent(OPERATION_LOGIN, EVENT_FAIL, error);
+            handleEvent(OPERATION_LOGIN, EVENT_FAIL, new Error("Please enter password."));
             return;
         }
 
@@ -475,20 +553,23 @@ var getAppContext;
         }
         if (isAuthenticated) {
             var tenantUser = carbonServer.tenantUser(username);
-            setCurrentUser(tenantUser.username, tenantUser.domain, tenantUser.tenantId);
+            utils.setCurrentUser(tenantUser.username, tenantUser.domain, tenantUser.tenantId);
             var scriptArgument = {
                 input: {username: username, password: password},
-                user: getCurrentUser()
+                user: module.getCurrentUser()
             };
             handleEvent(OPERATION_LOGIN, EVENT_SUCCESS, scriptArgument);
         } else {
-            var error = new Error("Incorrect username or password");
-            handleEvent(OPERATION_LOGIN, EVENT_FAIL, error);
+            handleEvent(OPERATION_LOGIN, EVENT_FAIL, new Error("Incorrect username or password."));
         }
     };
 
-    logout = function () {
-        var previousUser = getCurrentUser();
+    /**
+     * Basic logout.
+     * @param response {Object} HTTP response
+     */
+    module.logout = function (response) {
+        var previousUser = module.getCurrentUser();
         try {
             session.invalidate();
         } catch (e) {
@@ -502,4 +583,4 @@ var getAppContext;
         var scriptArgument = {input: {}, user: previousUser};
         handleEvent(OPERATION_LOGOUT, EVENT_SUCCESS, scriptArgument);
     };
-})();
+})(module);
