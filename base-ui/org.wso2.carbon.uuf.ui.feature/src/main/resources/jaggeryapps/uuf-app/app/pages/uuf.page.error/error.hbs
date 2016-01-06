@@ -1,4 +1,4 @@
-{{#zone "title"}}Error | WSO2{{/zone}}
+{{#zone "title"}}Error | {{@app.conf.appName}}{{/zone}}
 
 {{#zone "breadcrumbs"}}
     <li>
@@ -9,5 +9,13 @@
 {{/zone}}
 
 {{#zone "content"}}
-    {{unit "uuf.unit.message" type="danger" title=@page.params.status message=@page.params.message}}
+    <div class="message message-danger">
+        <h4><i class="icon fw fw-error"></i>An Error Occurred!</h4>
+
+        <div style="padding-left: 25px;">
+            <h5><b>HTTP Status : {{@page.params.status}}</b></h5>
+
+            <p style="white-space: pre-wrap;">{{{@page.params.message}}}</p>
+        </div>
+    </div>
 {{/zone}}
