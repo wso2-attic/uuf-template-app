@@ -1,6 +1,8 @@
 {
     "version": "1.0.0",
-    "scope": [
-        "/{+rest}"
-    ]
+    "pushedUris": [
+        "/",
+        "/{+any}"
+    ],
+    "isAnonymous": true
 }
