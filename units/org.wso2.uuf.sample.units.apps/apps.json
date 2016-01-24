@@ -1,6 +1,0 @@
-{
-    "version": "1.0.0",
-    "dependencies": [
-        "org.wso2.uuf.sample.units.app-tile"
-    ]
-}
