@@ -73,7 +73,7 @@ var renderer = {};
      */
     renderer.renderTemplate = function (template, templateContext, renderingContext,
                                         lookupTable, response) {
-        var handlebarsModule = require(constants.MODULE_HANDLEBARS);
+        var handlebarsModule = require("/lib/modules/handlebars/handlebars.js");
         try {
             var html = handlebarsModule.render(template, templateContext, renderingContext,
                                                lookupTable, response);
@@ -94,7 +94,7 @@ var renderer = {};
                 if (e.stack) {
                     // Java/Rhino Exceptions
                     log.error(e.message, e);
-                    response.sendError(500, e.message + "\n" + e.stack);
+                    response.sendError(500, e.message);
                 } else if (e.message) {
                     // JS "throw new Error(message)" type errors
                     log.error(e.message);

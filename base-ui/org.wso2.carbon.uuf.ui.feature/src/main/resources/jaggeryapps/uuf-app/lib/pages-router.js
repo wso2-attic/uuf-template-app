@@ -115,7 +115,7 @@ var route;
         } else {
             // Currently no user has logged in. So redirect to the login page.
             var queryString = request.getQueryString();
-            var referer = request.getRequestURL() + ((queryString) ? ("?" + queryString) : "");
+            var referer = renderingContext.uri + ((queryString) ? ("?" + queryString) : "");
             var redirectUri = getLoginPageUri(renderingContext, lookupTable) + "?"
                               + constants.URL_PARAM_REFERER + "=" + referer;
             response.sendRedirect(encodeURI(redirectUri));
