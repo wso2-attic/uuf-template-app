@@ -1,5 +1,10 @@
+# Note
+We have discontinued Jaggery based [Unified UI Framework](https://github.com/wso2/carbon-uuf/tree/js-master) and as a result this repository has been deprecated.
+***
+
+# UUF Template App
 This sample app demonstrate the features and functionality of the
-[Unified UI Framework](https://github.com/wso2/carbon-uuf).
+[Unified UI Framework](https://github.com/wso2/carbon-uuf/tree/js-master).
 
 ## How to deploy
 
